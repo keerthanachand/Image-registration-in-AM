@@ -13,8 +13,7 @@ The **primary goal** of this project is actaul nomimal comparison of **X-ray Com
 ### 2️⃣ **Data Preparation for Deep Learning**  
  
 - **Preprocessing XCT Data**:  
-  - Remove powder artifacts and close pores to enhance XCT quality.  
-  - Normalize intensity values to match CAD features.  
+  - Remove powder artifacts and close pores to enhance XCT quality.   
 - **Convert Data into HDF5 Format**:  
   - Structure datasets for deep learning model training.  
   - Store voxel-based data efficiently.  
