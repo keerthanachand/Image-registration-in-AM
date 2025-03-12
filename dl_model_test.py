@@ -202,6 +202,15 @@ def plot_3x3_images(fixed_image, moving_image, reconstructed_image):
     plt.tight_layout()
     plt.show()
 
+def gaussian_weight(shape, sigma=0.5):
+    """Generate a Gaussian weighting function to reduce block artifacts."""
+    z, y, x = np.meshgrid(
+        np.linspace(-1, 1, shape[0]), 
+        np.linspace(-1, 1, shape[1]), 
+        np.linspace(-1, 1, shape[2]), indexing='ij')
+    weight = np.exp(-(x**2 + y**2 + z**2) / (2 * sigma**2))
+    return weight / np.max(weight)  # Normalize to max 1
+
 def test_data_generator(hdf5_file, patch_size=(128, 128, 128), stride=(64, 64, 64)):
     """
     Generator that extracts consecutive patches from a 3D volume, processes them, 
@@ -224,18 +233,23 @@ def test_data_generator(hdf5_file, patch_size=(128, 128, 128), stride=(64, 64, 6
         start_time = time.time()
         sample_name = hf[f'static_{idx}'].attrs.get('sample_name', f'sample_{idx}')
         print(f'Predicting for sample: {sample_name}')
+
         vol_shape = hf[f'static_{idx}'].shape
         moving_image = hf[f'moving_{idx}'][...]
         fixed_image = hf[f'static_{idx}'][...]
+
+
         moving_shape = moving_image.shape
         fixed_shape = fixed_image.shape
         pad_fixed = [(0, (patch_size[i] - (fixed_shape[i] % patch_size[i])) % patch_size[i]) for i in range(len(fixed_shape))]
         pad_moving = [(0, (patch_size[i] - (moving_shape[i] % patch_size[i])) % patch_size[i]) for i in range(len(moving_shape))]
+
         # Apply padding to the images
-        padded_moving = np.pad(moving_image, pad_moving, mode='constant', constant_values=0)
-        padded_fixed = np.pad(fixed_image, pad_fixed, mode='constant', constant_values=0)
+        padded_moving = np.pad(moving_image, pad_moving, mode='reflect')
+        padded_fixed = np.pad(fixed_image, pad_fixed, mode='reflect')
         padded_vol_shape = padded_fixed.shape
         print('Padded data with zeros')
+
         # Calculate the number of patches in each dimension
         patches_per_dim = [(padded_vol_shape[i] - patch_size[i]) // stride[i] + 1 for i in range(len(padded_vol_shape))]
 
@@ -243,6 +257,10 @@ def test_data_generator(hdf5_file, patch_size=(128, 128, 128), stride=(64, 64, 6
         reconstructed_moved = np.zeros(padded_vol_shape)
         reconstructed_displacement = np.zeros((*padded_vol_shape, 3))
         weight_volume = np.zeros(padded_vol_shape)  # To handle overlapping regions
+
+        # Precompute Gaussian weights for blending
+        gaussian_weights = gaussian_weight(patch_size)
+
         print('Initialized arrays')
         for z in range(patches_per_dim[0]):
             for y in range(patches_per_dim[1]):
@@ -273,19 +291,21 @@ def test_data_generator(hdf5_file, patch_size=(128, 128, 128), stride=(64, 64, 6
                     processed_patch = processed_patch.squeeze()
                     displacement_patch = displacement_patch.squeeze()
 
-                    print('Stcitching prediction :::>')
-                    # Stitch the processed patch and displacement vector back into the reconstructed volumes
+                    # Stitch with Gaussian blending
                     reconstructed_moved[start_z:start_z + patch_size[0],
                                         start_y:start_y + patch_size[1],
-                                        start_x:start_x + patch_size[2]] += processed_patch
+                                        start_x:start_x + patch_size[2]] += processed_patch * gaussian_weights
 
                     reconstructed_displacement[start_z:start_z + patch_size[0],
                                                start_y:start_y + patch_size[1],
-                                               start_x:start_x + patch_size[2], :] += displacement_patch
-                    
+                                               start_x:start_x + patch_size[2], :] += displacement_patch * gaussian_weights[..., np.newaxis]
+
                     weight_volume[start_z:start_z + patch_size[0],
                                   start_y:start_y + patch_size[1],
-                                  start_x:start_x + patch_size[2]] += 1
+                                  start_x:start_x + patch_size[2]] += gaussian_weights
+
+                    print('Stitching prediction :::>')
+                    
 
         # Normalize to handle overlapping regions
         reconstructed_moved /= np.maximum(weight_volume, 1)  # Avoid division by zero
@@ -318,7 +338,7 @@ vxm_model.load_weights(model_path)
 
 #
 # test data load
-test_hdf5 = r'/home/kchand/input_data/Canister_test_datav2.h5'
+test_hdf5 = r'/home/kchand/input_data/test_data.h5'
 
 
 # Initialize the test generator
@@ -335,11 +355,12 @@ Dice_after_reg = dice_coefficient(fixed_image[:,:530,:], reconstructed_moved[:,:
 print(f'Dice score after non-linear registration on test data is: {Dice_after_reg:.4f}')
 
 #save data 
-save_image_as_vtk(reconstructed_moved, r'/home/kchand/results/Canister/moved_image.vtk')
-save_image_as_vtk(fixed_image, r'/home/kchand/results/Canister/fixed_image.vtk')
-save_image_as_vtk(moving_image, r'/home/kchand/results/Canister/moving_image.vtk')
-save_displacement_vector_as_vtk(reconstructed_displacement, r'/home/kchand/results/Canisterv2/disp_field.vtk')
-save_as_tiff(reconstructed_moved, r'/home/kchand/results/Canisterv2/reconstructed_moved.tiff')
-save_as_tiff(fixed_image, r'/home/kchand/results/Canisterv2/fixed_image.tiff')
-save_as_tiff(moving_image, r'/home/kchand/results/Canisterv2/moving_image.tiff')
+save_image_as_vtk(reconstructed_moved, r'/home/kchand/results/TPMS7/v1/moved_image.vtk')
+save_image_as_vtk(fixed_image, r'/home/kchand/results//TPMS7/v1/fixed_image.vtk')
+save_image_as_vtk(moving_image, r'/home/kchand/results//TPMS7/v1/moving_image.vtk')
+save_displacement_vector_as_vtk(reconstructed_displacement, r'/home/kchand/results//TPMS7/v1/disp_field.vtk')
+save_as_tiff(reconstructed_moved, r'/home/kchand/results//TPMS7/v1/reconstructed_moved.tiff')
+save_as_tiff(fixed_image, r'/home/kchand/results//TPMS7/v1/fixed_image.tiff')
+save_as_tiff(moving_image, r'/home/kchand/results//TPMS7/v1/moving_image.tiff')
 
+print('All data is saved!')
