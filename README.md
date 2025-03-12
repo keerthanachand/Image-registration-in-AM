@@ -11,7 +11,7 @@ The **primary goal** of this project is actaul nomimal comparison of **X-ray Com
   - Compute transformation matrices for initial alignment.  
 
 ### 2️⃣ **Data Preparation for Deep Learning**  
-- **Region of Interest (ROI) Extraction**: Isolate relevant regions from XCT scans.  
+ 
 - **Preprocessing XCT Data**:  
   - Remove powder artifacts and close pores to enhance XCT quality.  
   - Normalize intensity values to match CAD features.  
