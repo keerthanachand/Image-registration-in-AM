@@ -15,15 +15,26 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 tf.get_logger().setLevel('ERROR')
 
 
-def save_as_tiff(image, filename):
+def save_as_tiff_uint8(image, filename):
     """
-    Function to save a 3D numpy array as a TIFF file.
+    Save a 3D numpy array as a TIFF file after normalizing and converting to uint8.
     
     Args:
-        image (numpy array): The 3D image to be saved.
+        image (numpy array): The 3D float64 image to be saved.
         filename (str): The filename where the image will be saved.
     """
-    tiff.imwrite(filename, image)
+    # Normalize image to [0, 255]
+    min_val = np.min(image)
+    max_val = np.max(image)
+    if max_val - min_val == 0:
+        raise ValueError("Image has no dynamic range (min == max).")
+
+    image_normalized = (image - min_val) / (max_val - min_val)
+    image_uint8 = (image_normalized * 255).astype(np.uint8)
+
+    # Save as TIFF
+    tiff.imwrite(filename, image_uint8)
+    print(f"Saved normalized uint8 TIFF to {filename}")
 
 def save_image_as_vtk(moved_image, filename):
     # Create a PyVista grid for the moved image
@@ -359,8 +370,8 @@ save_image_as_vtk(reconstructed_moved, r'/home/kchand/results/TPMS7/v1/moved_ima
 save_image_as_vtk(fixed_image, r'/home/kchand/results//TPMS7/v1/fixed_image.vtk')
 save_image_as_vtk(moving_image, r'/home/kchand/results//TPMS7/v1/moving_image.vtk')
 save_displacement_vector_as_vtk(reconstructed_displacement, r'/home/kchand/results//TPMS7/v1/disp_field.vtk')
-save_as_tiff(reconstructed_moved, r'/home/kchand/results//TPMS7/v1/reconstructed_moved.tiff')
-save_as_tiff(fixed_image, r'/home/kchand/results//TPMS7/v1/fixed_image.tiff')
-save_as_tiff(moving_image, r'/home/kchand/results//TPMS7/v1/moving_image.tiff')
+save_as_tiff_uint8(reconstructed_moved, r'/home/kchand/results//TPMS7/v1/reconstructed_moved.tiff')
+save_as_tiff_uint8(fixed_image, r'/home/kchand/results//TPMS7/v1/fixed_image.tiff')
+save_as_tiff_uint8(moving_image, r'/home/kchand/results//TPMS7/v1/moving_image.tiff')
 
 print('All data is saved!')
