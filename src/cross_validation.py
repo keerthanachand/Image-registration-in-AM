@@ -1,121 +1,103 @@
 import os
 import h5py
 import numpy as np
-from tqdm import tqdm
-import subprocess
 import pandas as pd
-
-# train_voxelmorph_lib.py
-import json
-import tensorflow as tf
-import voxelmorph as vxm
-import numpy as np
-import h5py
-import os
 from pathlib import Path
+import tensorflow as tf
+from voxelmorph import layers, networks, losses
 
-def train_voxelmorph(train_hdf5, architecture_path, save_weights_path, log_dir=None):
-    # Load architecture
-    with open(architecture_path, "r") as json_file:
-        model_json = json_file.read()
-    model = tf.keras.models.model_from_json(
-        model_json,
-        custom_objects={
-            'SpatialTransformer': vxm.layers.SpatialTransformer,
-            'VxmDense': vxm.networks.VxmDense
-        }
+from evaluation_utils import (
+    test_data_generator,
+    save_image_as_vtk,
+    save_displacement_vector_as_vtk,
+    dice_coefficient,
+    save_as_tiff_uint8,
+    binarize_volume,
+    compute_diff_map,
+    report_combined_difference_percentages
+)
+from train_utils import initialize_generator_parameters, vxm_data_generator, build_and_train_vxm_model
+
+def train_voxelmorph(train_hdf5, save_weights_path, log_dir=None, nb_epochs=50):
+    generator_params = initialize_generator_parameters(hdf5_file=train_hdf5, patch_size=(128, 128, 128))
+    train_generator = vxm_data_generator(
+        hdf5_file=train_hdf5,
+        patch_size=(128, 128, 128),
+        batch_size=8,
+        generator_params=generator_params
     )
 
-    # Compile model
-    model.compile(optimizer='adam', loss=[vxm.losses.NCC().loss, vxm.losses.Grad('l2').loss])
-
-    # Load data
     with h5py.File(train_hdf5, 'r') as hf:
-        moving = np.stack([hf[key][...] for key in hf if key.startswith('moving_')])
-        fixed = np.stack([hf[key][...] for key in hf if key.startswith('static_')])
+        sample_moving = hf['moving_0'][...][np.newaxis, ..., np.newaxis]
+        sample_fixed = hf['static_0'][...][np.newaxis, ..., np.newaxis]
 
-    moving = moving[..., np.newaxis]  # add channel dim
-    fixed = fixed[..., np.newaxis]
+    in_sample = [sample_moving, sample_fixed]
 
-    # Train
-    history = model.fit([moving, fixed], [fixed, np.zeros_like(moving)], batch_size=1, epochs=10, verbose=1)
+    model, history = build_and_train_vxm_model(
+        train_generator=train_generator,
+        in_sample=in_sample,
+        nb_epochs=nb_epochs,
+        steps_per_epoch=4
+    )
 
-    # Save weights
     Path(save_weights_path).parent.mkdir(parents=True, exist_ok=True)
     model.save_weights(save_weights_path)
-    print(f"✅ Model weights saved to {save_weights_path}")
 
-    # Optionally save history
     if log_dir:
         log_path = os.path.join(log_dir, "training_history.csv")
-        import pandas as pd
         pd.DataFrame(history.history).to_csv(log_path, index=False)
-        print(f"📄 Training history saved to {log_path}")
 
-def evaluate_voxelmorph(test_hdf5, architecture_path, weights_path, result_dir):
-    from test_utils import test_data_generator, save_moved_image_as_vtk, save_displacement_vector_as_vtk, dice_coefficient, save_as_tiff
-    import json
-    import pyvista as pv
-    import pandas as pd
+def evaluate_voxelmorph(test_hdf5, weights_path, result_dir):
+    with h5py.File(test_hdf5, 'r') as hf:
+        moving = hf['moving_0'][...][np.newaxis, ..., np.newaxis]
+        fixed = hf['static_0'][...][np.newaxis, ..., np.newaxis]
 
-    # Load model architecture
-    with open(architecture_path, "r") as json_file:
-        model_json = json_file.read()
-    model = tf.keras.models.model_from_json(
-        model_json,
-        custom_objects={
-            'SpatialTransformer': vxm.layers.SpatialTransformer,
-            'VxmDense': vxm.networks.VxmDense
-        }
-    )
+    vol_shape = moving.shape[1:4]
+    model = networks.VxmDense(vol_shape, nb_features=[[32, 32, 32, 32], [32, 32, 32, 32, 32, 16]], int_steps=0)
     model.load_weights(weights_path)
 
-    # Run prediction
-    test_gen = test_data_generator(test_hdf5, patch_size=(128, 128, 128), stride=(64, 64, 64))
-    moved, disp, fixed, moving = next(test_gen)
+    moved, disp = model.predict([moving, fixed])
 
-    # Compute Dice score
-    dice_before = dice_coefficient(fixed[:,:530,:], moving[:,:530,:])
-    dice_after = dice_coefficient(fixed[:,:530,:], moved[:,:530,:])
+    fixed_crop = fixed[:, :530, :]
+    moving_crop = moving[:, :530, :]
+    moved_crop = moved[:, :530, :]
 
-    # Save outputs
+    binary_fixed = binarize_volume(fixed_crop)
+    binary_moving = binarize_volume(moving_crop)
+    binary_moved = binarize_volume(moved_crop)
+
+    dice_before = dice_coefficient(binary_fixed, binary_moving)
+    dice_after = dice_coefficient(binary_fixed, binary_moved)
+
+    diff_map_before = compute_diff_map(binary_fixed, binary_moving)
+    diff_stats_before = report_combined_difference_percentages(diff_map_before, binary_fixed, binary_moving)
+
+    diff_map_after = compute_diff_map(binary_fixed, binary_moved)
+    diff_stats_after = report_combined_difference_percentages(diff_map_after, binary_fixed, binary_moved)
+
     Path(result_dir).mkdir(parents=True, exist_ok=True)
     save_moved_image_as_vtk(moved, os.path.join(result_dir, "moved_image.vtk"))
     save_moved_image_as_vtk(fixed, os.path.join(result_dir, "fixed_image.vtk"))
     save_moved_image_as_vtk(moving, os.path.join(result_dir, "moving_image.vtk"))
     save_displacement_vector_as_vtk(disp, os.path.join(result_dir, "disp_field.vtk"))
-
     save_as_tiff(moved, os.path.join(result_dir, "reconstructed_moved.tiff"))
     save_as_tiff(fixed, os.path.join(result_dir, "fixed_image.tiff"))
     save_as_tiff(moving, os.path.join(result_dir, "moving_image.tiff"))
 
-    # Save Dice scores
-    pd.DataFrame({"Dice Before": [dice_before], "Dice After": [dice_after]}).to_csv(
-        os.path.join(result_dir, "dice_scores.csv"), index=False
-    )
-    print(f"🎯 Dice before: {dice_before:.4f}, after: {dice_after:.4f}")
+    fold_id = int(Path(result_dir).stem.split('_')[-1])
+    results = {
+        "fold": fold_id,
+        "Dice Before": dice_before,
+        "Dice After": dice_after,
+        "BDM Before -1 (%)": diff_stats_before["Percent -1"],
+        "BDM Before  0 (%)": diff_stats_before["Percent  0"],
+        "BDM Before +1 (%)": diff_stats_before["Percent +1"],
+        "BDM After  -1 (%)": diff_stats_after["Percent -1"],
+        "BDM After   0 (%)": diff_stats_after["Percent  0"],
+        "BDM After  +1 (%)": diff_stats_after["Percent +1"]
+    }
 
-
-# File paths
-all_data_path = '/home/kchand/input_data/all_data_for_cross_validation.h5'
-results_dir = '/home/kchand/results/cross_validation'
-os.makedirs(results_dir, exist_ok=True)
-
-results_csv = os.path.join(results_dir, 'loocv_metrics.csv')
-model_architecture = '/home/kchand/results/vxm_model_architecture.json'
-weights_output_dir = os.path.join(results_dir, 'vxm_weights_fold')
-os.makedirs(weights_output_dir, exist_ok=True)
-
-def train_model_for_fold(train_data_path, fold_idx):
-    weight_path = os.path.join(weights_output_dir, f'weights_fold{fold_idx}.h5')
-    cmd = [
-        'python', 'train_voxelmorph.py',
-        '--train_data', train_data_path,
-        '--model_json', model_architecture,
-        '--save_weights', weight_path
-    ]
-    subprocess.run(cmd)
-    return weight_path
+    pd.DataFrame([results]).to_csv(os.path.join(result_dir, "metrics_fold.csv"), index=False)
 
 def prepare_loocv_fold(input_file, test_idx):
     train_file = '/home/kchand/input_data/train_data_temp.h5'
@@ -139,32 +121,35 @@ def prepare_loocv_fold(input_file, test_idx):
                 hf_train[f'moving_{count}'].attrs['sample_name'] = hf_all[f'moving_{i}'].attrs['sample_name']
                 count += 1
 
-    print(f"[Fold {test_idx}] Prepared LOOCV train/test data")
     return train_file, test_file
 
-def evaluate_model(fold_idx, weights_path, test_file):
-    results_subdir = os.path.join(results_dir, f'fold_{fold_idx}')
-    os.makedirs(results_subdir, exist_ok=True)
-    cmd = [
-        'python', 'evaluate_voxelmorph.py',
-        '--test_data', test_file,
-        '--weights', weights_path,
-        '--fold', str(fold_idx),
-        '--output_dir', results_subdir
-    ]
-    subprocess.run(cmd)
+def run_loocv_pipeline():
+    all_data_path = '/home/kchand/input_data/all_data_for_cross_validation.h5'
+    results_dir = '/home/kchand/results/cross_validation'
+    weights_output_dir = os.path.join(results_dir, 'vxm_weights_fold')
 
-results = []
-for i in range(7):
-    print(f"========== Starting Fold {i} ==========")
-    train_file, test_file = prepare_loocv_fold(all_data_path, test_idx=i)
-    weights_file = train_model_for_fold(train_file, i)
-    evaluate_model(i, weights_file, test_file)
-    if os.path.exists(results_csv):
-        df = pd.read_csv(results_csv)
-        if 'fold' in df.columns and i in df['fold'].values:
-            results.append(df[df['fold'] == i].iloc[0].to_dict())
+    Path(results_dir).mkdir(parents=True, exist_ok=True)
+    Path(weights_output_dir).mkdir(parents=True, exist_ok=True)
 
-final_df = pd.DataFrame(results)
-final_df.to_csv(os.path.join(results_dir, 'loocv_all_metrics.csv'), index=False)
-print("LOOCV completed. All metrics saved to loocv_all_metrics.csv")
+    results = []
+
+    for fold_idx in range(7):
+        print(f"========== Starting Fold {fold_idx} ==========")
+        train_file, test_file = prepare_loocv_fold(all_data_path, fold_idx)
+        weights_path = os.path.join(weights_output_dir, f'weights_fold{fold_idx}.h5')
+        result_dir = os.path.join(results_dir, f'fold_{fold_idx}')
+
+        train_voxelmorph(train_file, weights_path)
+        evaluate_voxelmorph(test_file, weights_path, result_dir)
+
+        metrics_csv = os.path.join(result_dir, 'metrics_fold.csv')
+        if os.path.exists(metrics_csv):
+            df = pd.read_csv(metrics_csv)
+            results.append(df.iloc[0].to_dict())
+
+    final_df = pd.DataFrame(results)
+    final_df.to_csv(os.path.join(results_dir, 'loocv_all_metrics.csv'), index=False)
+    print("\n✅ LOOCV completed. All metrics saved to loocv_all_metrics.csv")
+
+if __name__ == "__main__":
+    run_loocv_pipeline()

@@ -15,7 +15,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 tf.get_logger().setLevel('ERROR')
 
 
-from test_utils import (
+from evaluation_utils import (
     test_data_generator,
     plot_images, 
     plot_3x3_images, 

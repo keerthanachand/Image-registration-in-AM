@@ -13,6 +13,8 @@ import pyvista as pv
 import pandas as pd
 import tifffile as tiff
 from tensorflow.keras.callbacks import ReduceLROnPlateau
+from voxelmorph import networks, losses
+
 #set GPU devuce 
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 tf.get_logger().setLevel('ERROR')
@@ -471,120 +473,180 @@ def plot_patches(inputs, outputs, patch_size=(128, 128, 128)):
     plt.show()
 
 
+def build_and_train_vxm_model(train_generator, in_sample, val_generator=None, nb_features=None, nb_epochs=150, steps_per_epoch=4, validation_steps=2):
+    """
+    Builds, compiles, and trains a VoxelMorph model on given data generators.
+
+    Parameters:
+        train_generator: Generator for training data.
+        in_sample: A sample input to determine volume shape.
+        val_generator: Generator for validation data (optional).
+        nb_features (list): List of encoder and decoder features.
+        nb_epochs (int): Number of training epochs.
+        steps_per_epoch (int): Training steps per epoch.
+        validation_steps (int): Validation steps per epoch.
+
+    Returns:
+        model (tf.keras.Model): Trained VoxelMorph model.
+        history (History): Training history object.
+    """
+    import time
+    from tensorflow.keras.callbacks import ReduceLROnPlateau
+    from voxelmorph import networks, losses
+
+    # Get volume shape and default features if not provided
+    vol_shape = in_sample[0].shape[1:4]
+    if nb_features is None:
+        nb_features = [[32, 32, 32, 32], [32, 32, 32, 32, 32, 16]]
+
+    # Initialize model
+    model = networks.VxmDense(vol_shape, nb_features, int_steps=0)
+
+    # Compile model with losses and weights
+    loss_functions = [losses.NCC().loss, losses.Grad('l2').loss]
+    loss_weights = [1, 0.05]
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+                  loss=loss_functions,
+                  loss_weights=loss_weights)
+
+    # Define callbacks
+    callbacks = []
+    if val_generator is not None:
+        lr_scheduler = ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.8,
+            patience=10,
+            min_lr=1e-6,
+            verbose=1
+        )
+    else:
+        lr_scheduler = ReduceLROnPlateau(
+            monitor='loss',
+            factor=0.8,
+            patience=10,
+            min_lr=1e-6,
+            verbose=1
+        )
+    callbacks.append(lr_scheduler)
+
+    # Train
+    start_time = time.time()
+    if val_generator is not None:
+        history = model.fit(
+            train_generator,
+            validation_data=val_generator,
+            epochs=nb_epochs,
+            steps_per_epoch=steps_per_epoch,
+            validation_steps=validation_steps,
+            verbose=2,
+            callbacks=callbacks
+        )
+    else:
+        history = model.fit(
+            train_generator,
+            epochs=nb_epochs,
+            steps_per_epoch=steps_per_epoch,
+            verbose=2,
+            callbacks=callbacks
+        )
+    end_time = time.time()
+    print(f"✅ Training completed in {(end_time - start_time) / 60:.2f} minutes")
+
+    return model, history
+
+if __name__ == '__main__':
+
+    # Paths to the HDF5 files
+    train_hdf5 = r'/home/kchand/input_data/train_data.h5'
+    val_hdf5 = r'/home/kchand/input_data/validation_data.h5'
+    #test_hdf5 = r'/home/kchand/input_data/test_data.h5'
+
+    # Initialize generator parameters (only need to do this once)
+    generator_params = initialize_generator_parameters(hdf5_file=train_hdf5, patch_size=(128, 128, 128))
+    # Create the generator with the precomputed parameters
+    train_generator = vxm_data_generator(hdf5_file=train_hdf5, patch_size=(128, 128, 128), batch_size=8, generator_params=generator_params)
+
+    # Create the validation generator with the precomputed parameters
+    val_generator_params = initialize_generator_parameters(hdf5_file=val_hdf5, patch_size=(128, 128, 128))
+    val_generator = vxm_data_generator(hdf5_file=val_hdf5, patch_size=(128, 128, 128), batch_size=4, generator_params=val_generator_params)
 
 
+    # Get sample data for input shapes
+    in_sample, out_sample = next(train_generator)
+    plot_patches(in_sample, out_sample, patch_size=(128, 128, 128))
 
-# Paths to the HDF5 files
-train_hdf5 = r'/home/kchand/input_data/train_data.h5'
-val_hdf5 = r'/home/kchand/input_data/validation_data.h5'
-test_hdf5 = r'/home/kchand/input_data/test_data.h5'
+    print(f"in_sample shape: {in_sample[0].shape}, {in_sample[1].shape}")
+    print(f"out_sample shape: {out_sample[0].shape}, {out_sample[1].shape}")
 
-# Initialize generator parameters (only need to do this once)
-generator_params = initialize_generator_parameters(hdf5_file=train_hdf5, patch_size=(128, 128, 128))
-# Create the generator with the precomputed parameters
-train_generator = vxm_data_generator(hdf5_file=train_hdf5, patch_size=(128, 128, 128), batch_size=8, generator_params=generator_params)
+    vxm_model, history = build_and_train_vxm_model(
+        train_generator=train_generator,
+        in_sample=in_sample,
+        val_generator=val_generator  # or None
+    )
 
-# Create the validation generator with the precomputed parameters
-val_generator_params = initialize_generator_parameters(hdf5_file=val_hdf5, patch_size=(128, 128, 128))
-val_generator = vxm_data_generator(hdf5_file=val_hdf5, patch_size=(128, 128, 128), batch_size=4, generator_params=val_generator_params)
+    # # Determine volume shape and features for the VoxelMorph model
+    # vol_shape = in_sample[0].shape[1:4]
+    # nb_features = [
+    # [32, 32, 32, 32],         # encoder features
+    # [32, 32, 32, 32, 32, 16]  # decoder features and conv 
+    # ]
 
+    # # Initialize the VoxelMorph model with 3D convolutions
+    # vxm_model = vxm.networks.VxmDense(vol_shape, nb_features, int_steps=0)
 
-# Get sample data for input shapes
-in_sample, out_sample = next(train_generator)
-plot_patches(in_sample, out_sample, patch_size=(128, 128, 128))
+    # #function call for vmxmodel
+    # #vxm_model = create_vxm_model(in_sample)
+    # #losses = [vxm.losses.MSE().loss, vxm.losses.Grad('l2').loss]
+    # losses = [vxm.losses.NCC().loss, vxm.losses.Grad('l2').loss]
+    # lambda_param = 0.05
+    # loss_weights = [1, lambda_param]
 
-print(f"in_sample shape: {in_sample[0].shape}, {in_sample[1].shape}")
-print(f"out_sample shape: {out_sample[0].shape}, {out_sample[1].shape}")
-
-# Determine volume shape and features for the VoxelMorph model
-vol_shape = in_sample[0].shape[1:4]
-nb_features = [
-    [32, 32, 32, 32],         # encoder features
-    [32, 32, 32, 32, 32, 16]  # decoder features and conv 
-]
-
-# Initialize the VoxelMorph model with 3D convolutions
-vxm_model = vxm.networks.VxmDense(vol_shape, nb_features, int_steps=0)
-
-#function call for vmxmodel
-#vxm_model = create_vxm_model(in_sample)
-#losses = [vxm.losses.MSE().loss, vxm.losses.Grad('l2').loss]
-losses = [vxm.losses.NCC().loss, vxm.losses.Grad('l2').loss]
-lambda_param = 0.05
-loss_weights = [1, lambda_param]
-
-vxm_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss=losses, loss_weights=loss_weights)
-#vxm_model.summary()
-# Train the model
-start_time = time.time()
-#number of times the model will go through the entire training dataset
-nb_epochs = 150
-#number of batches to draw from the generator for each epoch
-steps_per_epoch = 4
-validation_steps = 2 
-lr_scheduler = ReduceLROnPlateau(
-monitor='val_loss',    # Monitor validation loss to decide when to reduce the learning rate
-factor=0.8,            # Reduce learning rate by a factor of 0.5 (half it)
-patience=10,            # Number of epochs with no improvement after which to reduce learning rate
-min_lr=1e-6,           # Lower bound on the learning rate
-verbose=1              # Verbosity mode (prints updates when learning rate is reduced)
-)
+    # vxm_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss=losses, loss_weights=loss_weights)
+    # #vxm_model.summary()
+    # # Train the model
+    # start_time = time.time()
+    # #number of times the model will go through the entire training dataset
+    # nb_epochs = 150
+    # #number of batches to draw from the generator for each epoch
+    # steps_per_epoch = 4
+    # validation_steps = 2 
+    # lr_scheduler = ReduceLROnPlateau(
+    # monitor='val_loss',    # Monitor validation loss to decide when to reduce the learning rate
+    # factor=0.8,            # Reduce learning rate by a factor of 0.5 (half it)
+    # patience=10,            # Number of epochs with no improvement after which to reduce learning rate
+    # min_lr=1e-6,           # Lower bound on the learning rate
+    # verbose=1              # Verbosity mode (prints updates when learning rate is reduced)
+    # )
 
 
-#train the model
-hist = vxm_model.fit(
-train_generator,
-validation_data=val_generator,
-epochs=nb_epochs,
-steps_per_epoch=steps_per_epoch,
-validation_steps=validation_steps,
-verbose=2,
-callbacks=[lr_scheduler]  # Add learning rate scheduler to callbacks
-)
-end_time = time.time()
-elapsed_time = (end_time - start_time) / 60
-print(f"Time taken to complete training: {elapsed_time:.2f} minutes")
+    # #train the model
+    # hist = vxm_model.fit(
+    # train_generator,
+    # validation_data=val_generator,
+    # epochs=nb_epochs,
+    # steps_per_epoch=steps_per_epoch,
+    # validation_steps=validation_steps,
+    # verbose=2,
+    # callbacks=[lr_scheduler]  # Add learning rate scheduler to callbacks
+    # )
+    # end_time = time.time()
+    # elapsed_time = (end_time - start_time) / 60
+    # print(f"Time taken to complete training: {elapsed_time:.2f} minutes")
 
-#visualize history 
-plot_history(hist)
+    # #visualize history 
+    # plot_history(hist)
 
-# Validation
-#val_input, _ = next(val_generator)
-#val_pred = vxm_model.predict(val_input)
+    plot_history(history)
+    #model weights 
+    vxm_model.save_weights(r'/home/kchand/results/vxm_model_weights.h5')
 
-# Initialize the test generator
-test_generator = test_data_generator(test_hdf5, patch_size=(128, 128, 128), stride=(64, 64, 64))
-# Get the output for just one sample
-reconstructed_moved, reconstructed_displacement, fixed_image, moving_image = next(test_generator)
-# Plot the images
-plot_images(fixed_image, moving_image, reconstructed_moved)
-plot_3x3_images(fixed_image, moving_image, reconstructed_moved)
-# calculate Dice score on the data before and aftr non linear reg excluding the base plate
-Dice_init = dice_coefficient(fixed_image[:,:530,:], moving_image[:,:530,:])
-print(f'Dice score before non-linear registration on test data is: {Dice_init:.4f}')
-Dice_after_reg = dice_coefficient(fixed_image[:,:530,:], reconstructed_moved[:,:530,:])
-print(f'Dice score after non-linear registration on test data is: {Dice_after_reg:.4f}')
+    # Save the model architecture in JSON format
+    model_json = vxm_model.to_json()
+    with open(r"/home/kchand/results/vxm_model_architecture.json", "w") as json_file:
+        json_file.write(model_json)
 
 
-#save model and data 
-save_moved_image_as_vtk(reconstructed_moved, r'/home/kchand/results/moved_image.vtk')
-save_moved_image_as_vtk(fixed_image, r'/home/kchand/results/fixed_image.vtk')
-save_moved_image_as_vtk(moving_image, r'/home/kchand/results/moving_image.vtk')
-save_displacement_vector_as_vtk(reconstructed_displacement, r'/home/kchand/results/disp_field.vtk')
-save_as_tiff(reconstructed_moved, r'/home/kchand/results/reconstructed_moved.tiff')
-save_as_tiff(fixed_image, r'/home/kchand/results/fixed_image.tiff')
-save_as_tiff(moving_image, r'/home/kchand/results/moving_image.tiff')
-#model weights 
-vxm_model.save_weights(r'/home/kchand/results/vxm_model_weights.h5')
-
-# Save the model architecture in JSON format
-model_json = vxm_model.to_json()
-with open(r"/home/kchand/results/vxm_model_architecture.json", "w") as json_file:
-    json_file.write(model_json)
-
-
-
-# Convert training history to a DataFrame and save as CSV
-history_df = pd.DataFrame(hist.history)
-history_df.to_csv(r'/home/kchand/results/training_history.csv', index=False)
+    # Convert training history to a DataFrame and save as CSV
+    history_df = pd.DataFrame(hist.history)
+    history_df.to_csv(r'/home/kchand/results/training_history.csv', index=False)
 
