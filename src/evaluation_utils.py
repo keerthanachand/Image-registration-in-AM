@@ -41,7 +41,7 @@ def compute_diff_map(binary_ct, binary_cad):
     """
     return binary_ct.astype(np.int8) - binary_cad.astype(np.int8)
 
-import numpy as np
+
 
 def report_combined_difference_percentages(diff_map, binary_cad, binary_ct):
     """

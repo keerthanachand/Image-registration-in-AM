@@ -16,9 +16,10 @@ from evaluation_utils import (
     compute_diff_map,
     report_combined_difference_percentages
 )
+
 from train_utils import initialize_generator_parameters, vxm_data_generator, build_and_train_vxm_model
 
-def train_voxelmorph(train_hdf5, save_weights_path, log_dir=None, nb_epochs=50):
+def train_voxelmorph(train_hdf5, save_weights_path, json_path, log_dir=None, nb_epochs=150):
     generator_params = initialize_generator_parameters(hdf5_file=train_hdf5, patch_size=(128, 128, 128))
     train_generator = vxm_data_generator(
         hdf5_file=train_hdf5,
@@ -27,40 +28,65 @@ def train_voxelmorph(train_hdf5, save_weights_path, log_dir=None, nb_epochs=50):
         generator_params=generator_params
     )
 
-    with h5py.File(train_hdf5, 'r') as hf:
-        sample_moving = hf['moving_0'][...][np.newaxis, ..., np.newaxis]
-        sample_fixed = hf['static_0'][...][np.newaxis, ..., np.newaxis]
+    #with h5py.File(train_hdf5, 'r') as hf:
+        #sample_moving = hf['moving_0'][...][np.newaxis, ..., np.newaxis]
+        #sample_fixed = hf['static_0'][...][np.newaxis, ..., np.newaxis]
 
-    in_sample = [sample_moving, sample_fixed]
+    #in_sample = [sample_moving, sample_fixed]
+
+    in_sample, out_sample = next(train_generator)
 
     model, history = build_and_train_vxm_model(
         train_generator=train_generator,
         in_sample=in_sample,
         nb_epochs=nb_epochs,
-        steps_per_epoch=4
+        steps_per_epoch=8
     )
 
     Path(save_weights_path).parent.mkdir(parents=True, exist_ok=True)
     model.save_weights(save_weights_path)
+    # Save the model architecture in JSON format
+    
+    if not json_path.exists():
+        # Save the model architecture in JSON format
+        model_json = model.to_json()
+        with open(json_path, "w") as json_file:
+            json_file.write(model_json)
+        print(f"Model architecture saved to {json_path}")
+    else:
+        print(f"File already exists: {json_path} — skipping save.")
 
     if log_dir:
         log_path = os.path.join(log_dir, "training_history.csv")
         pd.DataFrame(history.history).to_csv(log_path, index=False)
 
-def evaluate_voxelmorph(test_hdf5, weights_path, result_dir):
+def evaluate_voxelmorph(test_hdf5, weights_path, result_dir, json_file):
+
     with h5py.File(test_hdf5, 'r') as hf:
         moving = hf['moving_0'][...][np.newaxis, ..., np.newaxis]
         fixed = hf['static_0'][...][np.newaxis, ..., np.newaxis]
 
     vol_shape = moving.shape[1:4]
-    model = networks.VxmDense(vol_shape, nb_features=[[32, 32, 32, 32], [32, 32, 32, 32, 32, 16]], int_steps=0)
+
+        # Load model architecture
+    with open(json_file, "r") as json_path:
+        model_json = json_path.read()
+
+    vxm_model = tf.keras.models.model_from_json(model_json, 
+                custom_objects={'SpatialTransformer': vxm.layers.SpatialTransformer, 
+                'VxmDense': vxm.networks.VxmDense})
+
     model.load_weights(weights_path)
 
-    moved, disp = model.predict([moving, fixed])
+    # Initialize the test generator
+    test_generator = test_data_generator(test_hdf5, patch_size=(128, 128, 128), stride=(64, 64, 64))
+    # Get the output for just one sample
+    reconstructed_moved, reconstructed_displacement, fixed_image, moving_image = next(test_generator)
+    # Plot the images
 
-    fixed_crop = fixed[:, :530, :]
-    moving_crop = moving[:, :530, :]
-    moved_crop = moved[:, :530, :]
+    fixed_crop = fixed_image[:, :530, :]
+    moving_crop = moving_image[:, :530, :]
+    moved_crop = reconstructed_moved[:, :530, :]
 
     binary_fixed = binarize_volume(fixed_crop)
     binary_moving = binarize_volume(moving_crop)
@@ -70,6 +96,7 @@ def evaluate_voxelmorph(test_hdf5, weights_path, result_dir):
     dice_after = dice_coefficient(binary_fixed, binary_moved)
 
     diff_map_before = compute_diff_map(binary_fixed, binary_moving)
+    #return difference map dictionary of BDM
     diff_stats_before = report_combined_difference_percentages(diff_map_before, binary_fixed, binary_moving)
 
     diff_map_after = compute_diff_map(binary_fixed, binary_moved)
@@ -127,7 +154,7 @@ def run_loocv_pipeline():
     all_data_path = '/home/kchand/input_data/all_data_for_cross_validation.h5'
     results_dir = '/home/kchand/results/cross_validation'
     weights_output_dir = os.path.join(results_dir, 'vxm_weights_fold')
-
+    json_path = Path("/home/kchand/results/cross_validation/vxm_model_architecture.json")
     Path(results_dir).mkdir(parents=True, exist_ok=True)
     Path(weights_output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -139,8 +166,8 @@ def run_loocv_pipeline():
         weights_path = os.path.join(weights_output_dir, f'weights_fold{fold_idx}.h5')
         result_dir = os.path.join(results_dir, f'fold_{fold_idx}')
 
-        train_voxelmorph(train_file, weights_path)
-        evaluate_voxelmorph(test_file, weights_path, result_dir)
+        train_voxelmorph(train_file, weights_path, json_path)
+        evaluate_voxelmorph(test_file, weights_path, result_dir, json_file)
 
         metrics_csv = os.path.join(result_dir, 'metrics_fold.csv')
         if os.path.exists(metrics_csv):
@@ -152,4 +179,5 @@ def run_loocv_pipeline():
     print("\n✅ LOOCV completed. All metrics saved to loocv_all_metrics.csv")
 
 if __name__ == "__main__":
+    
     run_loocv_pipeline()
