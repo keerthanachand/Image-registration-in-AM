@@ -9,8 +9,8 @@
 #SBATCH --time=00:10:00
 
 # Load environment (adjust path if needed)
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate voxelmorph-env
+source /home/kchand/miniforge3/etc/profile.d/conda.sh
+conda activate voxelmorph_tf2
 
 # Run the test
-python /home/kchand/gpu_test.py
+python /home/kchand/image_registration/src/gpu_test.py
