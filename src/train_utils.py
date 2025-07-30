@@ -15,9 +15,6 @@ import tifffile as tiff
 from tensorflow.keras.callbacks import ReduceLROnPlateau
 from voxelmorph import networks, losses
 
-#set GPU devuce 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
-tf.get_logger().setLevel('ERROR')
 
 
 

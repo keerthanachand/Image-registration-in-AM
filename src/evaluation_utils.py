@@ -10,9 +10,7 @@ import pandas as pd
 import time
 from skimage import filters
 
-# Set GPU device
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-tf.get_logger().setLevel('ERROR')
+
 
 def binarize_volume(data):
     """
@@ -295,7 +293,7 @@ def gaussian_weight(shape, sigma=0.5):
     weight = np.exp(-(x**2 + y**2 + z**2) / (2 * sigma**2))
     return weight / np.max(weight)  # Normalize to max 1
 
-def test_data_generator(hdf5_file, patch_size=(128, 128, 128), stride=(64, 64, 64)):
+def test_data_generator(vxm_model, hdf5_file, patch_size=(128, 128, 128), stride=(64, 64, 64)):
     """
     Generator that extracts consecutive patches from a 3D volume, processes them, 
     and then stitches them back together for one sample.

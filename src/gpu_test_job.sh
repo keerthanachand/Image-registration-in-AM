@@ -10,7 +10,8 @@
 
 # Load environment (adjust path if needed)
 source /home/kchand/miniforge3/etc/profile.d/conda.sh
-conda activate voxelmorph_tf2
+conda activate voxelmorph_tf215
+
 
 # Run the test
-python /home/kchand/image_registration/src/gpu_test.py
+python /home/kchand/image_registration/src/cross_validation.py
