@@ -7,9 +7,7 @@ import time
 from scipy.ndimage import binary_fill_holes, gaussian_filter, uniform_filter, binary_dilation
 import os
 os.environ['HDF5_DISABLE_VERSION_CHECK'] = '2'
-import numpy as np
-import matplotlib
-matplotlib.use('TkAgg')
+
 from skimage import filters
 import matplotlib
 matplotlib.use('TkAgg')
@@ -19,13 +17,14 @@ import tifffile as tiff
 from scipy import stats
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
-from skimage.filters import threshold_otsu
+from skimage.filters import threshold_otsu, threshold_local
 import matplotlib.pyplot as plt
 from skimage import morphology
 from skimage.measure import label, regionprops
 import random
 from scipy.ndimage import binary_fill_holes
 from skimage.restoration import denoise_tv_chambolle
+from skimage.morphology import remove_small_objects
 
 
 def adaptive_threshold_ct(ct_data, block_size=41, offset=5, min_size=500, slice_index=None, visualize=False):
