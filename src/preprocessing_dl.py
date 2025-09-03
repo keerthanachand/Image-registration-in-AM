@@ -7,7 +7,7 @@ import time
 from scipy.ndimage import binary_fill_holes, gaussian_filter, uniform_filter, binary_dilation
 import os
 os.environ['HDF5_DISABLE_VERSION_CHECK'] = '2'
-
+import nibabel as nib
 from skimage import filters
 import matplotlib
 matplotlib.use('TkAgg')
@@ -26,6 +26,14 @@ from scipy.ndimage import binary_fill_holes
 from skimage.restoration import denoise_tv_chambolle
 from skimage.morphology import remove_small_objects
 
+def read_data(file_path):
+    """Detects file type and reads the corresponding 3D volume."""
+    if file_path.endswith(('.tiff', '.tif')):
+        return tiff.imread(file_path)
+    elif file_path.endswith(('.hdr', '.img')):
+        return nib.load(file_path).get_fdata()
+    else:
+        raise ValueError(f"Unsupported file format: {file_path}")
 
 def adaptive_threshold_ct(ct_data, block_size=41, offset=5, min_size=500, slice_index=None, visualize=False):
     """
@@ -217,8 +225,10 @@ def process_and_save_data(data_dir, train_samples, validation_samples, test_samp
         static_path = os.path.join(data_dir, sample, 'CAD_data.tiff')
         moving_path = os.path.join(data_dir, sample, 'CT_data.tiff')
 
-        static = load_tiff_volume(static_path)
-        moving = load_tiff_volume(moving_path)
+        #static = load_tiff_volume(static_path)
+        #moving = load_tiff_volume(moving_path)
+        static = read_data(static_path)
+        moving = read_data(moving_path)
 
         #preprocessing the CT data
         #clean powder in moving
@@ -242,8 +252,8 @@ def process_and_save_data(data_dir, train_samples, validation_samples, test_samp
         static_path = os.path.join(data_dir, sample, 'CAD_data.tiff')
         moving_path = os.path.join(data_dir, sample, 'CT_data.tiff')
 
-        static = load_tiff_volume(static_path)
-        moving = load_tiff_volume(moving_path)
+        static = read_data(static_path)
+        moving = read_data(moving_path)
 
         # preprocessing the CT data
         # clean powder in moving plus thresholding away background
@@ -266,8 +276,8 @@ def process_and_save_data(data_dir, train_samples, validation_samples, test_samp
         static_path = os.path.join(data_dir, sample, 'CAD_data.tiff')
         moving_path = os.path.join(data_dir, sample, 'CT_data.tiff')
 
-        static = load_tiff_volume(static_path)
-        moving = load_tiff_volume(moving_path)
+        static = read_data(static_path)
+        moving = read_data(moving_path)
 
         # preprocessing the CT data
         # clean powder in moving
