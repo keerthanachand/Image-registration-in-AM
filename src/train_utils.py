@@ -172,98 +172,7 @@ def plot_3x3_images(fixed_image, moving_image, reconstructed_image):
 # plot_3x3_images(fixed_image, moving_image, reconstructed_image)
 
 
-def test_data_generator(hdf5_file, patch_size=(128, 128, 128), stride=(64, 64, 64)):
-    """
-    Generator that extracts consecutive patches from a 3D volume, processes them, 
-    and then stitches them back together for one sample.
-
-    Args:
-        hdf5_file: Path to the HDF5 file containing the volume data.
-        patch_size: Size of the 3D patches to extract.
-        stride: The step size between consecutive patches.
-    
-    Yields:
-        A tuple of stitched volumes (moved image, displacement field) reconstructed from the processed patches.
-    """
-    hf = h5py.File(hdf5_file, 'r')
-    num_samples = len(hf.keys()) // 2  # Assuming paired 'static' and 'moving' datasets
-    #vol_shape = hf['static_0'].shape
-    start_time = time.time()
-    # Calculate the necessary padding for each dimension
-    pad = [(0, (patch_size[i] - (vol_shape[i] % patch_size[i])) % patch_size[i]) for i in range(len(vol_shape))]
-    
-    for idx in range(num_samples):
-        moving_image = hf[f'moving_{idx}'][...]
-        fixed_image = hf[f'static_{idx}'][...]
-
-        # Apply padding to the images
-        padded_moving = np.pad(moving_image, pad, mode='constant', constant_values=0)
-        padded_fixed = np.pad(fixed_image, pad, mode='constant', constant_values=0)
-        padded_vol_shape = padded_moving.shape
-
-        # Calculate the number of patches in each dimension
-        patches_per_dim = [(padded_vol_shape[i] - patch_size[i]) // stride[i] + 1 for i in range(len(padded_vol_shape))]
-
-        # Initialize empty arrays for the stitched moved image and displacement field
-        reconstructed_moved = np.zeros(padded_vol_shape)
-        reconstructed_displacement = np.zeros((*padded_vol_shape, 3))
-        weight_volume = np.zeros(padded_vol_shape)  # To handle overlapping regions
-
-        for z in range(patches_per_dim[0]):
-            for y in range(patches_per_dim[1]):
-                for x in range(patches_per_dim[2]):
-                    start_z = z * stride[0]
-                    start_y = y * stride[1]
-                    start_x = x * stride[2]
-
-                    # Extract patch
-                    moving_patch = padded_moving[start_z:start_z + patch_size[0],
-                                                 start_y:start_y + patch_size[1],
-                                                 start_x:start_x + patch_size[2]]
-
-                    # Normalize the patch
-                    #moving_patch = (moving_patch - np.min(moving_patch)) / (np.max(moving_patch) - np.min(moving_patch))
-
-                    # Prepare input for the model
-                    patch_input = np.expand_dims(moving_patch, axis=-1)  # Add channel dimension
-                    fixed_patch = padded_fixed[start_z:start_z + patch_size[0],
-                                               start_y:start_y + patch_size[1],
-                                               start_x:start_x + patch_size[2]]
-                    fixed_patch = np.expand_dims(fixed_patch, axis=-1)
-                    inputs = [np.expand_dims(patch_input, axis=0), np.expand_dims(fixed_patch, axis=0)]
-                    
-                    # Model prediction
-                    processed_patch, displacement_patch = vxm_model.predict(inputs)
-                    processed_patch = processed_patch.squeeze()
-                    displacement_patch = displacement_patch.squeeze()
-
-                    # Stitch the processed patch and displacement vector back into the reconstructed volumes
-                    reconstructed_moved[start_z:start_z + patch_size[0],
-                                        start_y:start_y + patch_size[1],
-                                        start_x:start_x + patch_size[2]] += processed_patch
-
-                    reconstructed_displacement[start_z:start_z + patch_size[0],
-                                               start_y:start_y + patch_size[1],
-                                               start_x:start_x + patch_size[2], :] += displacement_patch
-                    
-                    weight_volume[start_z:start_z + patch_size[0],
-                                  start_y:start_y + patch_size[1],
-                                  start_x:start_x + patch_size[2]] += 1
-
-        # Normalize to handle overlapping regions
-        reconstructed_moved /= np.maximum(weight_volume, 1)  # Avoid division by zero
-        reconstructed_displacement /= np.maximum(weight_volume[..., np.newaxis], 1)  # Normalize the vector field
-
-        # Crop the padded area out to restore the original volume shape
-        reconstructed_moved = reconstructed_moved[:vol_shape[0], :vol_shape[1], :vol_shape[2]]
-        reconstructed_displacement = reconstructed_displacement[:vol_shape[0], :vol_shape[1], :vol_shape[2], :]
-        end_time = time.time()
-        elapsed_time = (end_time - start_time) / 60
-        print(f"Time taken to test one sample: {elapsed_time:.2f} minutes")
-        yield reconstructed_moved, reconstructed_displacement, fixed_image, moving_image  # Yield the reconstructed volumes and fixed image
-
-
-def save_moved_image_as_vtk(moved_image, filename):
+def save_image_as_vtk(moved_image, filename):
     # Create a PyVista grid for the moved image
     moved_image_shape = moved_image.shape
     x = np.arange(moved_image_shape[0])
@@ -272,7 +181,7 @@ def save_moved_image_as_vtk(moved_image, filename):
     grid = pv.StructuredGrid(*np.meshgrid(x, y, z, indexing="ij"))
 
     # Add the moved image data to the grid
-    grid["moved_image"] = moved_image.flatten(order="F")  # Flatten in Fortran order
+    grid["image"] = moved_image.flatten(order="F")  # Flatten in Fortran order
 
     # Save the moved image grid to a VTK file
     grid.save(filename)
@@ -318,12 +227,8 @@ def initialize_generator_parameters(hdf5_file, patch_size):
         vol_shape = hf['static_0'].shape
         ndims = len(vol_shape)
         
-        # Calculate max_x, max_y, and max_z based on the shape of the volumes
-        max_x = vol_shape[0] - patch_size[0]
-        max_y = vol_shape[1] - patch_size[1]
-        max_z = vol_shape[2] - patch_size[2]
 
-    return num_samples, vol_shape, ndims, max_x, max_y, max_z
+    return num_samples, vol_shape, ndims
 
 
 def vxm_data_generator(hdf5_file, patch_size=(128, 128, 128), batch_size=1, generator_params=None):
@@ -335,7 +240,7 @@ def vxm_data_generator(hdf5_file, patch_size=(128, 128, 128), batch_size=1, gene
     Outputs: moved image [bs, D, H, W, 1], zero-gradient [bs, D, H, W, 3]
     """
     # Unpack the generator parameters to avoid recalculating them
-    num_samples, vol_shape, ndims, max_x, max_y, max_z = generator_params
+    num_samples, vol_shape, ndims = generator_params
 
     with h5py.File(hdf5_file, 'r') as hf:
         # Zero array for the deformation field (used in outputs)
@@ -347,6 +252,13 @@ def vxm_data_generator(hdf5_file, patch_size=(128, 128, 128), batch_size=1, gene
         # Function to extract a random patch from the same location in both images
         def extract_corresponding_patches(moving_image, fixed_image, patch_size):
             # Generate a single set of starting coordinates for both moving and fixed images
+            dx, dy, dz = patch_size
+            W, H, D = moving_image.shape[:3]  # assume images are already padded to >= patch
+            # per-image maxima (clamped at 0)
+            max_x = max(0, W - dx)
+            max_y = max(0, H - dy)
+            max_z = max(0, D - dz)
+
             start_x = np.random.randint(0, max_x + 1)
             start_y = np.random.randint(0, max_y + 1)
             start_z = np.random.randint(0, max_z + 1)
@@ -470,7 +382,7 @@ def plot_patches(inputs, outputs, patch_size=(128, 128, 128)):
     plt.show()
 
 
-def build_and_train_vxm_model(train_generator, in_sample, val_generator=None, nb_features=None, nb_epochs=150, steps_per_epoch=4, validation_steps=2):
+def build_and_train_vxm_model(train_generator, in_sample, val_generator=None, nb_features=None, nb_epochs=150, steps_per_epoch=5, validation_steps=2):
     """
     Builds, compiles, and trains a VoxelMorph model on given data generators.
 

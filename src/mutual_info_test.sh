@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=voxel_cv
-#SBATCH --output=logs/sample15_steps100epoch400_%j.out
-#SBATCH --error=logs/sample15_steps100epoch400_%j.err
+#SBATCH --job-name=mutual_info_test
+#SBATCH --output=logs/cross_val_%j.out
+#SBATCH --error=logs/cross_val_%j.err
 #SBATCH --partition=batch
 #SBATCH --gres=gpu:1
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=8
-#SBATCH --time=3-00:00:00  # 3 days, adjust as needed
+#SBATCH --time=20:00:00  # 3 days, adjust as needed
 
 ### Mail to user when job start, terminate or abort
 ### Options: BEGIN|END|FAIL|REQUEUE|ALL
@@ -20,4 +20,4 @@ conda activate voxelmorph_tf215
 
 
 # Run the test
-python /home/kchand/image_registration/src/cross_validation.py
+python /home/kchand/image_registration/src/mutual_info_test.py

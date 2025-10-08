@@ -1,7 +1,6 @@
 import numpy as np
 import pyvista as pv
 import matplotlib
-matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import tifffile as tiff
 import numpy as np
@@ -817,7 +816,7 @@ def add_quiver(ax, disp_slice, title, show_labels=False, subsample=5):
         ax.set_ylabel("Y", fontsize=18)
 
 
-def generate_plot_overlays(ct_image, cad_image, moved_ct):
+def generate_plot_overlays(ct_image, cad_image, moved_ct, resolu):
     Dx, Dy, Dz = cad_image.shape
     x_mid, y_mid, z_mid = Dx // 2, Dy // 2, Dz // 2
 
@@ -907,22 +906,44 @@ def add_scalebar(ax, length_pixels=150, label="1 mm", height=8, pad=20):
     )
 
 def generate_plot_overlays(ct_image, cad_image, moved_ct):
+    """
+    Compare XCT vs CAD (before) and MOVED XCT vs CAD (after) in three planes.
+    - X (axial-like): no rotation
+    - Y (coronal): rotate 180° for consistent orientation
+    - Z (sagittal): rotate 180° for consistent orientation
+    """
+    if cad_image.shape != ct_image.shape or cad_image.shape != moved_ct.shape:
+        raise ValueError(f"All volumes must have the same shape. "
+                         f"Got CAD {cad_image.shape}, CT {ct_image.shape}, MOVED {moved_ct.shape}")
+
     Dx, Dy, Dz = cad_image.shape
     x_mid, y_mid, z_mid = Dx // 2, Dy // 2, Dz // 2
+
     fig, axes = plt.subplots(2, 3, figsize=(25, 10))
-    titles = ["XCT vs CAD", "XCT vs CAD", "XCT vs CAD",
-              "MOVED XCT vs CAD", "MOVED XCT vs CAD", "MOVED XCT vs CAD"]
-    slices = [
-        (cad_image[x_mid, :, :], ct_image[x_mid, :, :]),
-        (np.rot90(cad_image[:, :, z_mid], k=-1), np.rot90(ct_image[:, :, z_mid], k=-1)),
-        (cad_image[:, y_mid, :], ct_image[:, y_mid, :]),
-        (cad_image[x_mid, :, :], moved_ct[x_mid, :, :]),
-        (np.rot90(cad_image[:, :, z_mid], k=-1), np.rot90(moved_ct[:, :, z_mid], k=-1)),
-        (cad_image[:, y_mid, :], moved_ct[:, y_mid, :]),
+
+    titles = [
+        "XCT vs CAD (X mid)", "XCT vs CAD (Z mid, 180°)", "XCT vs CAD (Y mid, 180°)",
+        "MOVED XCT vs CAD (X mid)", "MOVED XCT vs CAD (Z mid, 180°)", "MOVED XCT vs CAD (Y mid, 180°)"
     ]
-    for ax, (cad, ct), title in zip(axes.flat, slices, titles):
-        plot_overlay(ax, cad, ct, title)
-        add_scalebar(ax, length_pixels=100, label="1 mm")  # 100 pixels = 1 mm
+
+    # Build slice pairs: (CAD, CT/MOVED)
+    slices = [
+        # BEFORE: CAD vs CT
+        (cad_image[x_mid, :, :],                 ct_image[x_mid, :, :]),                  # X mid (no rotation)
+        (np.rot90(cad_image[:, :, z_mid], 2),    np.rot90(ct_image[:, :, z_mid], 2)),     # Z mid (180°)
+        (np.rot90(cad_image[:, y_mid, :], 2),    np.rot90(ct_image[:, y_mid, :], 2)),     # Y mid (180°)
+
+        # AFTER: CAD vs MOVED CT
+        (cad_image[x_mid, :, :],                 moved_ct[x_mid, :, :]),                  # X mid (no rotation)
+        (np.rot90(cad_image[:, :, z_mid], 2),    np.rot90(moved_ct[:, :, z_mid], 2)),     # Z mid (180°)
+        (np.rot90(cad_image[:, y_mid, :], 2),    np.rot90(moved_ct[:, y_mid, :], 2)),     # Y mid (180°)
+    ]
+
+    for ax, (cad_slice, ct_slice), title in zip(axes.flat, slices, titles):
+        plot_overlay(ax, cad_slice, ct_slice, title)
+        # adjust scale bar as needed; your comment said "100 pixels = 1 mm" but label says 1.5 mm.
+        add_scalebar(ax, length_pixels=100, label="1.5 mm")
+
     plt.tight_layout()
     plt.show()
 
@@ -1068,16 +1089,16 @@ if __name__ == "__main__":
 
 
     # Define file paths
-    vtk_file_path = r"F:\Projects\_Additive_manufacturing\QI_Digital\Publications\04_deformation_prediction\results\stride_64_gaussian0.5_v1\disp_field.vtk"
+    disp_vtk_file_path = r"F:\Projects\_Additive_manufacturing\QI_Digital\Publications\04_deformation_prediction\results\stride_64_gaussian0.5_v1\disp_field.vtk"
     ct_file_path = r"F:\Projects\_Additive_manufacturing\QI_Digital\Publications\04_deformation_prediction\results\stride_64_gaussian0.5_v1\moving_image.tiff"  # XCT (Moving)
     cad_file_path = r"F:\Projects\_Additive_manufacturing\QI_Digital\Publications\04_deformation_prediction\results\stride_64_gaussian0.5_v1\fixed_image.tiff"  # CAD (Fixed)
     moved_ct_file_path = r"F:\Projects\_Additive_manufacturing\QI_Digital\Publications\04_deformation_prediction\results\stride_64_gaussian0.5_v1\reconstructed_moved.tiff"  # XCT (Moved)
     # Load displacement field
-    displacement_field = load_displacement_field(vtk_file_path)
+    displacement_field = load_displacement_field(disp_vtk_file_path)
     # Load CT (moving) and CAD (fixed) images
-    ct_image = load_tiff_image(ct_file_path)
-    cad_image = load_tiff_image(cad_file_path)
-    moved_ct = load_tiff_image(moved_ct_file_path)
+    ct_image = load_vtk_as_image(ct_file_path)
+    cad_image = load_vtk_as_image(cad_file_path)
+    moved_ct = load_vtk_as_image(moved_ct_file_path)
     # Generate plots
 
     #generate magnitude plots
@@ -1112,7 +1133,7 @@ if __name__ == "__main__":
                         glyph_factor=10)
 
     #for publication
-    generate_plot_overlays(ct_image, cad_image, moved_ct)
+    generate_plot_overlays(ct_image, cad_image, moved_ct, resolution = 15)
     generate_plot_deformations(displacement_field)
 
 

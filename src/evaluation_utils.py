@@ -309,6 +309,11 @@ def test_data_generator(vxm_model, hdf5_file, patch_size=(128, 128, 128), stride
     hf = h5py.File(hdf5_file, 'r')
     num_samples = len(hf.keys()) // 2  # Assuming paired 'static' and 'moving' datasets
     
+    def _next_multiple(n, base):
+        r = n % base
+        return n if r == 0 else n + (base - r) 
+
+
     # Calculate the necessary padding for each dimension
     #pad = [(0, (patch_size[i] - (vol_shape[i] % patch_size[i])) % patch_size[i]) for i in range(len(vol_shape))]
     for idx in range(num_samples):
@@ -323,12 +328,19 @@ def test_data_generator(vxm_model, hdf5_file, patch_size=(128, 128, 128), stride
 
         moving_shape = moving_image.shape
         fixed_shape = fixed_image.shape
-        pad_fixed = [(0, (patch_size[i] - (fixed_shape[i] % patch_size[i])) % patch_size[i]) for i in range(len(fixed_shape))]
-        pad_moving = [(0, (patch_size[i] - (moving_shape[i] % patch_size[i])) % patch_size[i]) for i in range(len(moving_shape))]
 
-        # Apply padding to the images
-        padded_moving = np.pad(moving_image, pad_moving, mode='reflect')
-        padded_fixed = np.pad(fixed_image, pad_fixed, mode='reflect')
+        # per-axis target = max of the two, each rounded up to next multiple of patch_size
+        target_shape = tuple(
+            max(_next_multiple(moving_shape[i], patch_size[i]),
+                _next_multiple(fixed_shape[i],  patch_size[i]))
+            for i in range(3)
+        )
+        # right-side zero pad both to the same target shape (pads only if needed)
+        pad_moving = [(0, target_shape[i] - moving_shape[i]) for i in range(3)]
+        pad_fixed  = [(0, target_shape[i] - fixed_shape[i])  for i in range(3)]
+
+        padded_moving = np.pad(moving_image, pad_moving, mode='constant', constant_values=0)
+        padded_fixed  = np.pad(fixed_image,  pad_fixed,  mode='constant', constant_values=0)
         padded_vol_shape = padded_fixed.shape
         print('Padded data with zeros')
 

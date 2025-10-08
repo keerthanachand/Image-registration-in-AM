@@ -7,10 +7,10 @@ import tensorflow as tf
 from voxelmorph import layers, networks, losses
 import voxelmorph as vxm
 import matplotlib.pyplot as plt
+import time
 
 from evaluation_utils import (
     test_data_generator,
-    save_image_as_vtk,
     save_displacement_vector_as_vtk,
     save_as_tiff_uint8,
     binarize_volume,
@@ -23,7 +23,7 @@ from train_utils import (
     initialize_generator_parameters, 
     vxm_data_generator, 
     build_and_train_vxm_model, 
-    save_moved_image_as_vtk
+    save_image_as_vtk
 )
 
 print("🔍 Checking available devices...")
@@ -47,6 +47,7 @@ def dice_coefficient(volume_A, volume_B):
     total_voxels_B = np.sum(volume_B)
     dice = (2.0 * intersection) / (total_voxels_A + total_voxels_B)
     return dice
+
 def plot_3x3_images(fixed_image, moving_image, reconstructed_image, save_path=None):
     """
     Plot and optionally save a 3x3 grid of slices from fixed, moving, and reconstructed images.
@@ -95,14 +96,14 @@ def plot_3x3_images(fixed_image, moving_image, reconstructed_image, save_path=No
         plt.show()
 
 
-def train_voxelmorph(train_hdf5, save_weights_path, json_path, log_dir=None, nb_epochs=150):
+def train_voxelmorph(train_hdf5, save_weights_path, json_path, log_dir=None, nb_epochs=150, batch_size=8, steps_per_epoch = 8):
     print(f"📦 Loading training data from: {train_hdf5}")
     generator_params = initialize_generator_parameters(hdf5_file=train_hdf5, patch_size=(128, 128, 128))
     print("🔄 Initializing VoxelMorph training data generator...")
     train_generator = vxm_data_generator(
         hdf5_file=train_hdf5,
         patch_size=(128, 128, 128),
-        batch_size=8,
+        batch_size= batch_size,
         generator_params=generator_params
     )
 
@@ -118,7 +119,7 @@ def train_voxelmorph(train_hdf5, save_weights_path, json_path, log_dir=None, nb_
         train_generator=train_generator,
         in_sample=in_sample,
         nb_epochs=nb_epochs,
-        steps_per_epoch=8
+        steps_per_epoch=steps_per_epoch
     )
     print(f"💾 Saving model weights to: {save_weights_path}")
     Path(save_weights_path).parent.mkdir(parents=True, exist_ok=True)
@@ -166,26 +167,32 @@ def evaluate_voxelmorph(test_hdf5, weights_path, result_dir, json_file):
 
 
     print("🧠 Running inference on test sample...")
+    
     # Initialize the test generator
     test_generator = test_data_generator(vxm_model, test_hdf5, patch_size=(128, 128, 128), stride=(64, 64, 64))
     # Get the output for just one sample
+    start_time = time.time()
     reconstructed_moved, reconstructed_displacement, fixed_image, moving_image = next(test_generator)
-    # Plot the images
+    inference_time_sec = time.time() - start_time
+    print(f"⏱️ Inference completed in {inference_time_sec:.2f} seconds")
 
-
-    #print("🧼 Computing Dice and BDM metrics...")
+    print("🧼 Computing Dice and BDM metrics...")
     #fixed_crop = fixed_image[:, :530, :]
     #moving_crop = moving_image[:, :530, :]
     #moved_crop = reconstructed_moved[:, :530, :]
-    print("🧼 Computing Dice and BDM metrics...")
-    fixed_crop = fixed_image
-    moving_crop = moving_image
-    moved_crop = reconstructed_moved
+    fixed_crop = fixed_image[:, :, :]
+    moving_crop = moving_image[:, :, :]
+    moved_crop = reconstructed_moved[:, :, :]
+    # print("🧼 Computing Dice and BDM metrics...")
+    # fixed_crop = fixed_image
+    # moving_crop = moving_image
+    # moved_crop = reconstructed_moved
 
     binary_fixed = binarize_volume(fixed_crop)
     binary_moving = binarize_volume(moving_crop)
     binary_moved = binarize_volume(moved_crop)
 
+    Path(result_dir).mkdir(parents=True, exist_ok=True)
     plot_path = os.path.join(result_dir, "slice_comparison.png")
     plot_3x3_images(binary_fixed, binary_moving, binary_moved, save_path=plot_path)
     
@@ -203,10 +210,10 @@ def evaluate_voxelmorph(test_hdf5, weights_path, result_dir, json_file):
     diff_map_after = compute_diff_map(binary_fixed, binary_moved)
     diff_stats_after = report_combined_difference_percentages(diff_map_after, binary_fixed, binary_moved)
 
-    Path(result_dir).mkdir(parents=True, exist_ok=True)
-    save_moved_image_as_vtk(reconstructed_moved, os.path.join(result_dir, "moved_image.vtk"))
-    save_moved_image_as_vtk(fixed_image, os.path.join(result_dir, "fixed_image.vtk"))
-    save_moved_image_as_vtk(moving_image, os.path.join(result_dir, "moving_image.vtk"))
+    
+    save_image_as_vtk(reconstructed_moved, os.path.join(result_dir, "moved_image.vtk"))
+    save_image_as_vtk(fixed_image, os.path.join(result_dir, "fixed_image.vtk"))
+    save_image_as_vtk(moving_image, os.path.join(result_dir, "moving_image.vtk"))
     save_displacement_vector_as_vtk(reconstructed_displacement, os.path.join(result_dir, "disp_field.vtk"))
     #save_as_tiff(moved, os.path.join(result_dir, "reconstructed_moved.tiff"))
     #save_as_tiff(fixed, os.path.join(result_dir, "fixed_image.tiff"))
@@ -223,7 +230,8 @@ def evaluate_voxelmorph(test_hdf5, weights_path, result_dir, json_file):
     "BDM Before +1 (%)": diff_stats_before["Percent +1"],
     "BDM After  -1 (%)": diff_stats_after["Percent -1"],
     "BDM After   0 (%)": diff_stats_after["Percent  0"],
-    "BDM After  +1 (%)": diff_stats_after["Percent +1"]
+    "BDM After  +1 (%)": diff_stats_after["Percent +1"],
+    "Inference Time (s)": round(inference_time_sec, 2)
     }
 
 
@@ -232,7 +240,7 @@ def evaluate_voxelmorph(test_hdf5, weights_path, result_dir, json_file):
     del test_generator
 
 
-def prepare_loocv_fold(input_file, test_idx):
+def prepare_loocv_fold(input_file, test_idx, num_samples):
     train_file = '/home/kchand/input_data/train_data_temp.h5'
     test_file = '/home/kchand/input_data/test_data_temp.h5'
 
@@ -242,6 +250,7 @@ def prepare_loocv_fold(input_file, test_idx):
     if os.path.exists(test_file):
         os.remove(test_file)
 
+    # write test file: copy selected pair as index 0
     with h5py.File(input_file, 'r') as hf_all:
         with h5py.File(test_file, 'w') as hf_test:
             hf_test.create_dataset('static_0', data=hf_all[f'static_{test_idx}'][...])
@@ -251,7 +260,7 @@ def prepare_loocv_fold(input_file, test_idx):
 
         with h5py.File(train_file, 'w') as hf_train:
             count = 0
-            for i in range(7):
+            for i in range(num_samples):
                 if i == test_idx:
                     continue
                 hf_train.create_dataset(f'static_{count}', data=hf_all[f'static_{i}'][...])
@@ -262,24 +271,27 @@ def prepare_loocv_fold(input_file, test_idx):
 
     return train_file, test_file
 
-def run_loocv_pipeline():
+def run_loocv_pipeline(num_samples, only_fold=None):
     print("🏁 Starting LOOCV pipeline...")
-    all_data_path = '/home/kchand/input_data/all_data_for_cross_validation.h5'
-    results_dir = '/home/kchand/results/cross_validation'
+    all_data_path = '/home/kchand/input_data/all_samples_simple_structures.h5'
+    results_dir = '/home/kchand/results/simple_structures_sample15_stepsperepoch100_epochs400'
     weights_output_dir = os.path.join(results_dir, 'vxm_weights_fold')
-    json_path = Path("/home/kchand/results/cross_validation/vxm_model_architecture.json")
+    json_path = Path("/home/kchand/results/cross_validation_simple_structures/vxm_model_architecture.json")
     Path(results_dir).mkdir(parents=True, exist_ok=True)
     Path(weights_output_dir).mkdir(parents=True, exist_ok=True)
 
     results = []
 
-    for fold_idx in range(7):
+    folds_to_run = [only_fold] if only_fold is not None else range(num_samples)
+
+    for fold_idx in folds_to_run:
         print(f"========== Starting Fold {fold_idx} ==========")
-        train_file, test_file = prepare_loocv_fold(all_data_path, fold_idx)
+        train_file, test_file = prepare_loocv_fold(all_data_path, fold_idx, num_samples)
         weights_path = os.path.join(weights_output_dir, f'weights_fold{fold_idx}.h5')
         result_dir = os.path.join(results_dir, f'fold_{fold_idx}')
         log_dir = os.path.join(result_dir, "logs")
-        train_voxelmorph(train_file, weights_path, json_path, log_dir = log_dir, nb_epochs=2)
+        train_voxelmorph(train_file, weights_path, json_path, log_dir = log_dir,
+         nb_epochs=400, batch_size=8, steps_per_epoch = 100)
         evaluate_voxelmorph(test_file, weights_path, result_dir, json_path)
 
         metrics_csv = os.path.join(result_dir, 'metrics_fold.csv')
@@ -301,5 +313,10 @@ if __name__ == "__main__":
             print(f"  🖥️ GPU {i}: {gpu.name}")
     else:
         print("⚠️ No GPU found. Using CPU.")
+    num_samples = 16
 
-    run_loocv_pipeline()
+    #toggle for a single fold (optional) e.g., set to 0 or 3 to test a single fold; max = num_samples - 1
+    only_fold = 15
+    run_loocv_pipeline(num_samples = 16, only_fold=only_fold)
+
+
