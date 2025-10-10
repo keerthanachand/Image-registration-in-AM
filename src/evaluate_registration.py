@@ -47,9 +47,19 @@ vxm_model = tf.keras.models.model_from_json(model_json,
 vxm_model.load_weights(model_path)
 
 #
-# test data load
-test_hdf5 = r'/home/kchand/input_data/test_data.h5'
+# load data 
+#test_hdf5 = r'/home/kchand/input_data/test_data.h5'
+num_samples = 16
 
+#toggle for a single fold (optional) e.g., set to 0 or 3 to test a single fold; max = num_samples - 1
+only_fold = 15
+all_data_path = '/home/kchand/input_data/all_samples_simple_structures.h5'
+#load data
+folds_to_run = [only_fold] if only_fold is not None else range(num_samples)
+
+for fold_idx in folds_to_run:
+    print(f"========== Starting Fold {fold_idx} ==========")
+    _, test_hdf5 = prepare_loocv_fold(all_data_path, fold_idx, num_samples)
 
 # Initialize the test generator
 test_generator = test_data_generator(test_hdf5, patch_size=(128, 128, 128), stride=(64, 64, 64))
@@ -59,9 +69,9 @@ reconstructed_moved, reconstructed_displacement, fixed_image, moving_image = nex
 plot_images(fixed_image, moving_image, reconstructed_moved)
 plot_3x3_images(fixed_image, moving_image, reconstructed_moved)
 # calculate Dice score on the data before and aftr non linear reg excluding the base plate
-Dice_init = dice_coefficient(fixed_image[:,:530,:], moving_image[:,:530,:])
+Dice_init = dice_coefficient(fixed_image[:,:,:], moving_image[:,:,:])
 print(f'Dice score before non-linear registration on test data is: {Dice_init:.4f}')
-Dice_after_reg = dice_coefficient(fixed_image[:,:530,:], reconstructed_moved[:,:530,:])
+Dice_after_reg = dice_coefficient(fixed_image[:,:,:], reconstructed_moved[:,:,:])
 print(f'Dice score after non-linear registration on test data is: {Dice_after_reg:.4f}')
 
 #save data 

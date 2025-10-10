@@ -179,12 +179,12 @@ def global_otsu_thresholding(data, roi=None):
 def dice_coefficient(volume_A, volume_B):
 
     # Get the middle third region of the volumes
-    roi_A = get_middle_region(volume_A)
-    roi_B = get_middle_region(volume_B)
+    #roi_A = get_middle_region(volume_A)
+    #roi_B = get_middle_region(volume_B)
 
     #binarize the volumes
-    volume_A = global_otsu_thresholding(volume_A, roi=roi_A)
-    volume_B = global_otsu_thresholding(volume_B, roi=roi_B)
+    volume_A = global_otsu_thresholding(volume_A, roi=None)
+    volume_B = global_otsu_thresholding(volume_B, roi=None)
 
     #make sure diemsion is same
     min_dim0 = min(volume_A.shape[0], volume_B.shape[0])
