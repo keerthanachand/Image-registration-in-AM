@@ -10,12 +10,59 @@ import pandas as pd
 import time
 from skimage import filters
 
+#script to plot histogram
 
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+def plot_two_histories(hist1_path, hist2_path, label1="Model A", label2="Model B",
+                       show_val=False, out_path=None):
+    """
+    Plot total loss from two CSV history files on one chart.
+    - y-axis fixed to [-1, 0]
+    - optionally includes val_loss
+    """
+    def _load(csv):
+        df = pd.read_csv(csv)
+        epoch = df['epoch'] if 'epoch' in df.columns else pd.Series(range(len(df)))
+        loss = pd.to_numeric(df.get('loss'), errors='coerce').values
+        vloss = pd.to_numeric(df.get('val_loss'), errors='coerce').values if 'val_loss' in df.columns else None
+        return epoch.values, loss, vloss
+
+    e1, l1, vl1 = _load(hist1_path)
+    e2, l2, vl2 = _load(hist2_path)
+
+    # clip to [-1, 0]
+    l1 = np.clip(l1, -1.0, 0.0)
+    l2 = np.clip(l2, -1.0, 0.0)
+    if vl1 is not None: vl1 = np.clip(vl1, -1.0, 0.0)
+    if vl2 is not None: vl2 = np.clip(vl2, -1.0, 0.0)
+
+    plt.figure(figsize=(8,5))
+    plt.plot(e1, l1, label=f"{label1} — loss", linewidth=2)
+    plt.plot(e2, l2, label=f"{label2} — loss", linewidth=2, linestyle="--")
+    if show_val:
+        if vl1 is not None and not np.all(np.isnan(vl1)):
+            plt.plot(e1, vl1, label=f"{label1} — val_loss", alpha=0.7)
+        if vl2 is not None and not np.all(np.isnan(vl2)):
+            plt.plot(e2, vl2, label=f"{label2} — val_loss", alpha=0.7)
+
+    plt.title("Training Loss Comparison")
+    plt.xlabel("Epoch"); plt.ylabel("Total loss")
+    plt.ylim(-1.0, 0.0); plt.grid(True, linestyle=":", linewidth=0.8); plt.legend()
+    plt.tight_layout()
+
+    if out_path:
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(out_path, dpi=200)
+    else:
+        plt.show()
 
 def binarize_volume(data):
     """
-    Convert all non-zero values in the input array to 1 (binary foreground),
-    and leave zero values as 0 (background).
+    Binarise using otsu thresholding
 
     Parameters:
         data (ndarray): 2D or 3D input volume or image.
@@ -23,7 +70,10 @@ def binarize_volume(data):
     Returns:
         ndarray: Binarized array with values 0 or 1.
     """
-    return (data != 0).astype(np.uint8)
+    flattened_data = data.flatten()
+    threshold = filters.threshold_otsu(flattened_data)
+    thresholded_data = (data >= threshold).astype(np.uint8)
+    return thresholded_data
 
 
 def compute_diff_map(binary_ct, binary_cad):
@@ -139,52 +189,15 @@ def save_displacement_vector_as_vtk(displacement_vector, filename):
     # Save the displacement vector grid to a VTK file
     grid.save(filename)
 
-def get_middle_region(volume):
-    """
-    Extract the middle third region of the 3D volume to avoid outer areas with air.
-    
-    Args:
-        volume (numpy array): The 3D volume.
-        
-    Returns:
-        numpy array: The extracted middle region of the 3D volume.
-    """
-    # Define the start and end points for the middle third in each dimension
-    start_x, end_x = volume.shape[0] // 3, 2 * volume.shape[0] // 3
-    start_y, end_y = volume.shape[1] // 3, 2 * volume.shape[1] // 3
-    start_z, end_z = volume.shape[2] // 3, 2 * volume.shape[2] // 3
-    
-    # Extract the middle region
-    middle_region = volume[start_x:end_x, start_y:end_y, start_z:end_z]    
-    return middle_region
-
-def global_otsu_thresholding(data, roi=None):
-    # Flatten the 3D CT data to a 1D array
-    if roi is not None:
-        # Apply the ROI to the data
-
-        flattened_data = roi.flatten()
-    else:
-        # Flatten the entire data if ROI is not specified
-        flattened_data = data.flatten()
-
-    # Apply Otsu's thresholding to the flattened data
-    threshold = filters.threshold_otsu(flattened_data)
-
-    # Threshold the entire CT data
-    thresholded_data = (data >= threshold).astype(np.uint8) * 1
-
-    return thresholded_data
 
 def dice_coefficient(volume_A, volume_B):
 
     # Get the middle third region of the volumes
-    #roi_A = get_middle_region(volume_A)
-    #roi_B = get_middle_region(volume_B)
+
 
     #binarize the volumes
-    volume_A = global_otsu_thresholding(volume_A, roi=None)
-    volume_B = global_otsu_thresholding(volume_B, roi=None)
+    volume_A = binarize_volume(volume_A)
+    volume_B = binarize_volume(volume_B)
 
     #make sure diemsion is same
     min_dim0 = min(volume_A.shape[0], volume_B.shape[0])

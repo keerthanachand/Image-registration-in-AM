@@ -75,9 +75,6 @@ def main():
         print(f"========== Starting Fold {fold_idx} ==========")
         train_file, test_file = prepare_loocv_fold(all_data_path, fold_idx, num_samples)
 
-    loss_functions = [losses.NCC().loss, losses.Grad('l2').loss]
-    loss_weights = [1, 0.05]
-
     generator_params = initialize_generator_parameters(hdf5_file=train_file, patch_size=(128, 128, 128))
     print("Initializing VoxelMorph training data generator for first level...")
     train_generator = vxm_data_generator(
@@ -88,7 +85,7 @@ def main():
     )
 
     #in_sample, out_sample = next(train_generator)
-    """
+   
     # Stage 1: freeze first two levels
     freeze_first_two_encoder_levels_convs(model)
 
@@ -97,7 +94,7 @@ def main():
 
     # Compile model with losses and weights
     loss_functions = [losses.NCC().loss, losses.Grad('l2').loss]
-    loss_weights = [1, 0.05]
+    loss_weights = [1, 0.2]
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate= LR_STAGE1),
                  loss=loss_functions,
                  loss_weights=loss_weights)
@@ -121,7 +118,7 @@ def main():
 
     end_time = time.time()
     print(f"✅ Training completed in {(end_time - start_time) / 60:.2f} minutes")
-    """
+
     # Stage 2: unfreeze all with lower LR
     for l in model.layers: l.trainable = True
 
@@ -164,19 +161,19 @@ if __name__=="__main__":
 
     PATCH_SIZE      = (128, 128, 128)
     BATCH_SIZE      = 8
-    STEPS_PER_EPOCH = 100
+    STEPS_PER_EPOCH = 50
 
     # Stage 1 (frozen)
-    EPOCHS_STAGE1   = 130
+    EPOCHS_STAGE1   = 100
 
 
     FREEZE_FIRST_LEVELS = 2      # freeze first N Levels
-    LR_STAGE1       = 0.0001
+    LR_STAGE1       = 0.001
 
 
     # Stage 2 (unfrozen)
     EPOCHS_STAGE2   = 50
-    LR_STAGE2       = 0.0002
+    LR_STAGE2       = 0.0001
     # -------------------------------------------------
 
     #data 

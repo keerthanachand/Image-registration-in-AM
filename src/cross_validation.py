@@ -16,7 +16,7 @@ from evaluation_utils import (
     binarize_volume,
     compute_diff_map,
     report_combined_difference_percentages,
-    
+    dice_coefficient
 )
 
 from train_utils import (
@@ -28,25 +28,6 @@ from train_utils import (
 
 print("🔍 Checking available devices...")
 print(tf.config.list_physical_devices('GPU'))
-
-def dice_coefficient(volume_A, volume_B):
-
-    #make sure diemsion is same
-    min_dim0 = min(volume_A.shape[0], volume_B.shape[0])
-    min_dim1 = min(volume_A.shape[1], volume_B.shape[1])
-    min_dim2 = min(volume_A.shape[2], volume_B.shape[2])
-
-    volume_A = volume_A[:min_dim0, :min_dim1, :min_dim2]
-    volume_B = volume_B[:min_dim0, :min_dim1, :min_dim2]
-
-    #calculate the dice score
-    volume_A = np.array(volume_A, dtype=np.float64)
-    volume_B = np.array(volume_B, dtype=np.float64)
-    intersection = np.sum(np.logical_and(volume_A, volume_B))
-    total_voxels_A = np.sum(volume_A)
-    total_voxels_B = np.sum(volume_B)
-    dice = (2.0 * intersection) / (total_voxels_A + total_voxels_B)
-    return dice
 
 def plot_3x3_images(fixed_image, moving_image, reconstructed_image, save_path=None):
     """
@@ -117,14 +98,14 @@ def train_voxelmorph(train_hdf5, save_weights_path, json_path, log_dir=None, nb_
 
     model, history = build_and_train_vxm_model(
         train_generator=train_generator,
-        in_sample=in_sample,
+        in_sample=in_sample, loss_weights = [1,0.2],
         nb_epochs=nb_epochs,
-        steps_per_epoch=steps_per_epoch
+        steps_per_epoch=steps_per_epoch, 
     )
     print(f"💾 Saving model weights to: {save_weights_path}")
     Path(save_weights_path).parent.mkdir(parents=True, exist_ok=True)
     model.save_weights(save_weights_path)
-    # Save the model architecture in JSON format
+    # Save the model architecture in JSON formatss
     
     if not json_path.exists():
         # Save the model architecture in JSON format
@@ -197,8 +178,8 @@ def evaluate_voxelmorph(test_hdf5, weights_path, result_dir, json_file):
     plot_3x3_images(binary_fixed, binary_moving, binary_moved, save_path=plot_path)
     
 
-    dice_before = dice_coefficient(binary_fixed, binary_moving)
-    dice_after = dice_coefficient(binary_fixed, binary_moved)
+    dice_before = dice_coefficient(fixed_crop, moving_crop)
+    dice_after = dice_coefficient(fixed_crop, moved_crop)
 
     print(f"🎯 Dice BEFORE registration: {dice_before:.4f}")
     print(f"✅ Dice AFTER registration:  {dice_after:.4f}")
@@ -274,9 +255,9 @@ def prepare_loocv_fold(input_file, test_idx, num_samples):
 def run_loocv_pipeline(num_samples, only_fold=None):
     print("🏁 Starting LOOCV pipeline...")
     all_data_path = '/home/kchand/input_data/all_samples_simple_structures.h5'
-    results_dir = '/home/kchand/results/simple_structures_sample15_stepsperepoch100_epochs400'
+    results_dir = '/home/kchand/results/simple_structures_sample15_stepsperepoch50_epochs200'
     weights_output_dir = os.path.join(results_dir, 'vxm_weights_fold')
-    json_path = Path("/home/kchand/results/cross_validation_simple_structures/vxm_model_architecture.json")
+    json_path = Path("/home/kchand/results/cross_validation/vxm_model_architecture.json")
     Path(results_dir).mkdir(parents=True, exist_ok=True)
     Path(weights_output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -291,7 +272,7 @@ def run_loocv_pipeline(num_samples, only_fold=None):
         result_dir = os.path.join(results_dir, f'fold_{fold_idx}')
         log_dir = os.path.join(result_dir, "logs")
         train_voxelmorph(train_file, weights_path, json_path, log_dir = log_dir,
-         nb_epochs=400, batch_size=8, steps_per_epoch = 100)
+        nb_epochs=200, batch_size=8, steps_per_epoch = 50)
         evaluate_voxelmorph(test_file, weights_path, result_dir, json_path)
 
         metrics_csv = os.path.join(result_dir, 'metrics_fold.csv')

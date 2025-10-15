@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=voxel_cv
-#SBATCH --output=logs/sample15_steps100epoch400_%j.out
-#SBATCH --error=logs/sample15_steps100epoch400_%j.err
+#SBATCH --output=logs/sample15_steps50epoch200_%j.out
+#SBATCH --error=logs/sample15_steps50epoch200_%j.err
 #SBATCH --partition=batch
 #SBATCH --gres=gpu:1
 #SBATCH --mem=64G

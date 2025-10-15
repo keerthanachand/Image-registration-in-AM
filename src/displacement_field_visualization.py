@@ -23,6 +23,8 @@ def get_middle_region(volume):
     # Extract the middle region
     middle_region = volume[start_x:end_x, start_y:end_y, start_z:end_z]
     return middle_region
+
+
 def global_otsu_thresholding(data, roi=None):
     # Flatten the 3D CT data to a 1D array
     if roi is not None:
@@ -104,6 +106,7 @@ def visualize_3d_quiver(ct_image, displacement_field_corrected, title="3D Displa
     except Exception as e:
         print(f"Visualization failed: {e}")
 
+
 def visualize_3d_displacement_magnitude(ct_image, displacement_field,
                                         title="3D Displacement Magnitude (μm)", clim_max=400):
     """
@@ -152,6 +155,7 @@ def visualize_3d_displacement_magnitude(ct_image, displacement_field,
         plotter.show()
     except Exception as e:
         print(f"Visualization failed: {e}")
+
 
 def plot_overlay_and_quiver_single_axis_horizontal(ct_image, cad_image, displacement_field, axis='YZ', slice_index=None,
                                                    subsample=5):
@@ -370,6 +374,7 @@ def apply_weighted_gaussian_filter(deformation_field, sigma=1.5):
         print(f"Error applying Gaussian filter: {e}")
         return None
 
+
 def filter_deformation_field(deformation_field, ct_image):
     """
     Filter the deformation field to keep only values where the CT image is foreground.
@@ -394,6 +399,7 @@ def filter_deformation_field(deformation_field, ct_image):
     except Exception as e:
         print(f"Error filtering deformation field: {e}")
         return None
+
 
 def plot_directional_histograms(deformation_field, bins=50, title_prefix="Histogram of Deformation Components"):
     """
@@ -780,8 +786,8 @@ plt.rcParams.update({'font.size': 22})
 
 
 def plot_overlay(ax, cad, ct, title, cmap_cad="Greens", cmap_ct="gray", alpha=0.5):
-    ax.imshow(cad, cmap=cmap_cad, alpha=1.0)
-    ax.imshow(ct, cmap=cmap_ct, alpha=alpha)
+    ax.imshow(ct, cmap=cmap_ct)    
+    ax.imshow(cad, cmap=cmap_cad, alpha=alpha)
     ax.set_title(title, fontsize=22)
     ax.axis("off")
     ax.set_aspect('equal')
@@ -922,8 +928,8 @@ def generate_plot_overlays(ct_image, cad_image, moved_ct):
     fig, axes = plt.subplots(2, 3, figsize=(25, 10))
 
     titles = [
-        "XCT vs CAD (X mid)", "XCT vs CAD (Z mid, 180°)", "XCT vs CAD (Y mid, 180°)",
-        "MOVED XCT vs CAD (X mid)", "MOVED XCT vs CAD (Z mid, 180°)", "MOVED XCT vs CAD (Y mid, 180°)"
+        "XCT vs CAD ", "XCT vs CAD ", "XCT vs CAD ",
+        "MOVED XCT vs CAD ", "MOVED XCT vs CAD ", "MOVED XCT vs CAD ("
     ]
 
     # Build slice pairs: (CAD, CT/MOVED)

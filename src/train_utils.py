@@ -382,7 +382,7 @@ def plot_patches(inputs, outputs, patch_size=(128, 128, 128)):
     plt.show()
 
 
-def build_and_train_vxm_model(train_generator, in_sample, val_generator=None, nb_features=None, nb_epochs=150, steps_per_epoch=5, validation_steps=2):
+def build_and_train_vxm_model(train_generator, in_sample, val_generator=None, nb_features=None, loss_weights = [1, 0.2], nb_epochs=150, steps_per_epoch=5, validation_steps=2):
     """
     Builds, compiles, and trains a VoxelMorph model on given data generators.
 
@@ -413,7 +413,6 @@ def build_and_train_vxm_model(train_generator, in_sample, val_generator=None, nb
 
     # Compile model with losses and weights
     loss_functions = [losses.NCC().loss, losses.Grad('l2').loss]
-    loss_weights = [1, 0.05]
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
                   loss=loss_functions,
                   loss_weights=loss_weights)
