@@ -16,7 +16,7 @@ SAVE_ROOT      = "/home/kchand/results/finetune_two_stage_optuna"
 PATCH_SIZE     = (128, 128, 128)
 STUDY_NAME     = "vxm_two_stage_val"
 STORAGE_URL    = "sqlite:////home/kchand/results/voxelmorph_two_stage.db"
-TRIALS_PER_WORKER = 1
+TRIALS_PER_WORKER = 32
 SEED_BASE      = 1000
 
 # Explicit split by index
@@ -102,8 +102,8 @@ def objective(trial, cfg):
     lambda_smooth   = trial.suggest_categorical("lambda_smooth", [0.1, 0.2, 0.25, 0.3])
 
     # widened ranges; low < high
-    lr_stage1       = trial.suggest_float("lr_stage1", 1e-5, 1e-3, log=True)
-    lr_stage2       = trial.suggest_float("lr_stage2", 1e-6, 1e-5, 5e-4, log=True)
+    lr_stage1       = trial.suggest_categorical("lr_stage1", [1e-5, 1e-4, 1e-3])
+    lr_stage2       = trial.suggest_categorical("lr_stage2", [1e-6, 1e-5, 5e-4])
 
     # discrete epoch choices -> categorical
     epochs_stage1   = trial.suggest_categorical("epochs_stage1", [50, 70, 100])
@@ -116,7 +116,7 @@ def objective(trial, cfg):
     lr_factor_s2    = trial.suggest_float("lr_factor_s2", 0.3, 0.8)
     lr_patience_s1  = trial.suggest_int("lr_patience_stage1", 5, 10)
     lr_patience_s2  = trial.suggest_int("lr_patience_stage2", 2, 5)
-    lr_min          = trial.suggest_float("lr_min", 1e-7, 1e-8, log=True)
+    lr_min          = trial.suggest_float("lr_min", 1e-8, 1e-7, log=True)
 
     # Trial dir & params
     tdir = os.path.join(cfg["save_root"], f"trial_{trial.number:04d}")
