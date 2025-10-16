@@ -14,7 +14,72 @@ import pandas as pd
 import tifffile as tiff
 from tensorflow.keras.callbacks import ReduceLROnPlateau
 from voxelmorph import networks, losses
+import os, h5py, numpy as np
 
+
+def split_by_index(input_file, test_indices, val_indices, num_samples):
+    """
+    Split dataset into train / val / test based on explicit sample indices.
+
+    Example:
+        test_indices = [15, 10]
+        val_indices  = [6, 11]
+    The rest are used as training data.
+
+    Returns:
+        (train_file, val_file, test_file)
+    """
+
+    train_file = '/home/kchand/input_data/train_data_temp.h5'
+    val_file   = '/home/kchand/input_data/val_data_temp.h5'
+    test_file  = '/home/kchand/input_data/test_data_temp.h5'
+
+    # 🚨 Delete existing temporary files
+    for f in [train_file, val_file, test_file]:
+        if os.path.exists(f):
+            os.remove(f)
+
+    # Build index lists
+    all_idx = set(range(num_samples))
+    test_idx_set = set(test_indices)
+    val_idx_set  = set(val_indices)
+    train_idx = sorted(list(all_idx - test_idx_set - val_idx_set))
+
+    print(f"📊 Split: {len(train_idx)} train, {len(val_idx_set)} val, {len(test_idx_set)} test samples")
+
+    # --- Copy datasets ---
+    with h5py.File(input_file, 'r') as hf_all:
+        # Train
+        with h5py.File(train_file, 'w') as hf_train:
+            count = 0
+            for i in train_idx:
+                hf_train.create_dataset(f'static_{count}', data=hf_all[f'static_{i}'][...])
+                hf_train.create_dataset(f'moving_{count}', data=hf_all[f'moving_{i}'][...])
+                hf_train[f'static_{count}'].attrs['sample_name'] = hf_all[f'static_{i}'].attrs['sample_name']
+                hf_train[f'moving_{count}'].attrs['sample_name'] = hf_all[f'moving_{i}'].attrs['sample_name']
+                count += 1
+
+        # Validation
+        with h5py.File(val_file, 'w') as hf_val:
+            count = 0
+            for i in sorted(val_indices):
+                hf_val.create_dataset(f'static_{count}', data=hf_all[f'static_{i}'][...])
+                hf_val.create_dataset(f'moving_{count}', data=hf_all[f'moving_{i}'][...])
+                hf_val[f'static_{count}'].attrs['sample_name'] = hf_all[f'static_{i}'].attrs['sample_name']
+                hf_val[f'moving_{count}'].attrs['sample_name'] = hf_all[f'moving_{i}'].attrs['sample_name']
+                count += 1
+
+        # Test
+        with h5py.File(test_file, 'w') as hf_test:
+            count = 0
+            for i in sorted(test_indices):
+                hf_test.create_dataset(f'static_{count}', data=hf_all[f'static_{i}'][...])
+                hf_test.create_dataset(f'moving_{count}', data=hf_all[f'moving_{i}'][...])
+                hf_test[f'static_{count}'].attrs['sample_name'] = hf_all[f'static_{i}'].attrs['sample_name']
+                hf_test[f'moving_{count}'].attrs['sample_name'] = hf_all[f'moving_{i}'].attrs['sample_name']
+                count += 1
+
+    return train_file, val_file, test_file
 
 
 
