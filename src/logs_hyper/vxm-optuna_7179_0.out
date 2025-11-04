@@ -1,2 +1,0 @@
-📊 Split: 10 train, 2 val, 4 test samples
-Visible GPUs: [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]
