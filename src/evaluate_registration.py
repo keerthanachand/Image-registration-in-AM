@@ -68,7 +68,7 @@ with h5py.File(test_hdf5, 'r') as hf:
         #get the sample name from the attributes
         sample_name = hf['static_0'].attrs.get('sample_name', 'unknown_sample')
 
- vol_shape = moving.shape[1:4]
+vol_shape = moving.shape[1:4]
 # Initialize the test generator
 test_generator = test_data_generator(vxm_model, test_hdf5, patch_size=(128, 128, 128), stride=(64, 64, 64))
 # Get the output for just one sample
@@ -76,16 +76,25 @@ reconstructed_moved, reconstructed_displacement, fixed_image, moving_image = nex
 # Plot the images
 plot_images(fixed_image, moving_image, reconstructed_moved)
 plot_3x3_images(fixed_image, moving_image, reconstructed_moved)
+
+#binarize and plot 
+#binarise fixed and moving
+binary_fixed = binarize_volume(fixed_image)
+binary_moving = binarize_volume(moving_image)
+binary_moved = binarize_volume(reconstructed_moved)
+plot_images(binary_fixed, binary_moving, binary_moved)
+plot_3x3_images(binary_fixed, binary_moving, binary_moved)
+
+# Plot the images
+plot_images(fixed_image, moving_image, reconstructed_moved)
+plot_3x3_images(fixed_image, moving_image, reconstructed_moved)
+
 # calculate Dice score on the data before and aftr non linear reg excluding the base plate
 Dice_init = dice_coefficient(fixed_image[:,:,:], moving_image[:,:,:])
 print(f'Dice score before non-linear registration on test data is: {Dice_init:.4f}')
 Dice_after_reg = dice_coefficient(fixed_image[:,:,:], reconstructed_moved[:,:,:])
 print(f'Dice score after non-linear registration on test data is: {Dice_after_reg:.4f}')
 
-#binarise fixed and moving
-binary_fixed = binarize_volume(fixed_image)
-binary_moving = binarize_volume(moving_image)
-binary_moved = binarize_volume(reconstructed_moved)
 
 
 diff_map_before = compute_diff_map(binary_fixed, binary_moving)
