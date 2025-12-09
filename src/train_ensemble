@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+import os
+os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
+
+import json
+import time
+import numpy as np
+import tensorflow as tf
+import optuna
+
+import voxelmorph as vxm
+from voxelmorph import losses
+
+from tensorflow.keras.callbacks import (
+    CSVLogger,
+    ModelCheckpoint,
+    ReduceLROnPlateau,
+    EarlyStopping,
+)
+
+from train_utils import (
+    split_by_index,
+    initialize_generator_parameters,
+    vxm_data_generator,
+)
+
+# ========= CONFIG =========
+MODEL_JSON     = "/home/kchand/results/cross_validation/vxm_model_architecture.json"
+TRAIN_HDF5     = "/home/kchand/input_data/all_data_for_cross_validation_TPMS.h5"
+SAVE_ROOT      = "/home/kchand/results/hyperparameter_TPMS"
+ENSEMBLE_ROOT  = os.path.join(SAVE_ROOT, "ensemble")
+PATCH_SIZE     = (128, 128, 128)
+
+STUDY_NAME     = "vxm_TPMS_hyperparameter"
+STORAGE_URL    = "sqlite:////home/kchand/results/finetune_two_stage_optuna/hyperparameter_tuning_TPMS.db?timeout=300"
+
+SEED_BASE      = 5000
+
+# Same split as tuning
+NUM_SAMPLES = 7
+TEST_IDX    = [6]
+VAL_IDX     = [4]
+
+def set_tf_memory_growth():
+    gpus = tf.config.list_physical_devices("GPU")
+    for g in gpus:
+        try:
+            tf.config.experimental.set_memory_growth(g, True)
+        except Exception:
+            pass
+    print("Visible GPUs:", gpus)
+
+def set_global_seed(seed: int):
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+    tf.keras.utils.set_random_seed(seed)
+
+def build_model_from_json(json_path: str):
+    with open(json_path, "r") as f:
+        model_json = f.read()
+    model = tf.keras.models.model_from_json(
+        model_json,
+        custom_objects={
+            "SpatialTransformer": vxm.layers.SpatialTransformer,
+            "VxmDense": vxm.networks.VxmDense,
+        },
+    )
+    return model
+
+def compile_vm(model, lr: float, lambda_smooth: float):
+    ncc  = losses.NCC().loss
+    grad = losses.Grad("l2").loss
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=lr),
+        loss=[ncc, grad],
+        loss_weights=[1.0, lambda_smooth],
+    )
+
+def train_single_ensemble_model(
+    ens_id: int,
+    best_params: dict,
+    model_json_path: str,
+    train_h5: str,
+    val_h5: str,
+    patch_size,
+):
+    tf.keras.backend.clear_session()
+
+    seed = SEED_BASE + ens_id
+    set_global_seed(seed)
+    print(f"\n===== [ENSEMBLE] Training member {ens_id:02d} with seed {seed} =====")
+
+    batch_size      = best_params["batch_size"]
+    steps_per_epoch = best_params["steps_per_epoch"]
+    lambda_smooth   = best_params["lambda_smooth"]
+    lr              = best_params["lr_stage1"]
+    epochs          = best_params["epochs_stage1"]
+    lr_factor       = best_params["lr_factor_s1"]
+    lr_patience     = best_params["lr_patience_stage1"]
+    lr_min          = best_params["lr_min"]
+
+    os.makedirs(ENSEMBLE_ROOT, exist_ok=True)
+    tdir = os.path.join(ENSEMBLE_ROOT, f"ens_{ens_id:02d}")
+    os.makedirs(tdir, exist_ok=True)
+
+    with open(os.path.join(tdir, "used_params.json"), "w") as f:
+        json.dump({**best_params, "seed": seed}, f, indent=2)
+
+    t0 = time.time()
+    train_params = initialize_generator_parameters(
+        hdf5_file=train_h5, patch_size=patch_size
+    )
+    val_params   = initialize_generator_parameters(
+        hdf5_file=val_h5, patch_size=patch_size
+    )
+    train_gen = vxm_data_generator(
+        train_h5, patch_size, batch_size, train_params
+    )
+    val_gen   = vxm_data_generator(
+        val_h5, patch_size, batch_size, val_params
+    )
+    print(f"[ENSEMBLE {ens_id:02d}] Generators initialized in {time.time()-t0:.2f}s")
+    val_steps = 10
+
+    model = build_model_from_json(model_json_path)
+    print(f"[ENSEMBLE {ens_id:02d}] Compiling model (lr={lr}, λ={lambda_smooth}) ...")
+    compile_vm(model, lr, lambda_smooth)
+    print(f"[ENSEMBLE {ens_id:02d}] ✅ Compilation complete.")
+
+    ckpt_path = os.path.join(tdir, "weights_stage2.h5")
+    log_path  = os.path.join(tdir, "hist.csv")
+
+    callbacks = [
+        CSVLogger(log_path),
+        ModelCheckpoint(
+            ckpt_path,
+            save_best_only=True,
+            save_weights_only=True,
+            monitor="val_loss",
+            mode="min",
+        ),
+        ReduceLROnPlateau(
+            monitor="val_loss",
+            factor=lr_factor,
+            patience=lr_patience,
+            min_lr=lr_min,
+            verbose=2,
+        ),
+        EarlyStopping(
+            monitor="val_loss",
+            patience=20,
+            restore_best_weights=True,
+            verbose=1,
+        ),
+    ]
+
+    print(f"[ENSEMBLE {ens_id:02d}] 🚀 Training for {epochs} epochs ...")
+    hist = model.fit(
+        train_gen,
+        validation_data=val_gen,
+        epochs=epochs,
+        steps_per_epoch=steps_per_epoch,
+        validation_steps=val_steps,
+        workers=0,
+        use_multiprocessing=False,
+        verbose=2,
+        callbacks=callbacks,
+    )
+
+    best_val = float(min(hist.history["val_loss"]))
+    print(f"[ENSEMBLE {ens_id:02d}] ✅ Finished. Best val_loss={best_val:.6f}")
+    tf.keras.backend.clear_session()
+
+if __name__ == "__main__":
+    set_tf_memory_growth()
+    os.makedirs(SAVE_ROOT, exist_ok=True)
+
+    # Decide ensemble member ID from SLURM
+    # e.g. if you submit --array=0-19, ens_id = 0..19
+    ens_id = int(os.environ.get("SLURM_ARRAY_TASK_ID", "0"))
+    print(f"Running ensemble member id = {ens_id}")
+
+    # Split once (same split as tuning)
+    print("Splitting dataset with split_by_index ...")
+    train_h5, val_h5, test_h5 = split_by_index(
+        TRAIN_HDF5, TEST_IDX, VAL_IDX, NUM_SAMPLES
+    )
+    print("Train H5:", train_h5)
+    print("Val   H5:", val_h5)
+    print("Test  H5:", test_h5)
+
+    # Load best hyperparameters from Optuna
+    print(f"Connecting to Optuna study '{STUDY_NAME}' at:")
+    print(f"  {STORAGE_URL}")
+    study = optuna.load_study(study_name=STUDY_NAME, storage=STORAGE_URL)
+
+    print("\n===== BEST RESULT FROM STUDY =====")
+    print("Best value:", study.best_value)
+    print("Best params:")
+    print(json.dumps(study.best_params, indent=2))
+
+    best_params = study.best_params
+
+    # Train exactly ONE ensemble member (this task's ens_id)
+    train_single_ensemble_model(
+        ens_id=ens_id,
+        best_params=best_params,
+        model_json_path=MODEL_JSON,
+        train_h5=train_h5,
+        val_h5=val_h5,
+        patch_size=PATCH_SIZE,
+    )
