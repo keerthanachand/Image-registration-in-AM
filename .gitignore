@@ -1,0 +1,4 @@
+
+# Large meshes
+*.stl
+*.ply
