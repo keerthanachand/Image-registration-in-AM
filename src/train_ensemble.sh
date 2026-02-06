@@ -4,10 +4,10 @@
 #SBATCH --error=logs_hyper/%x_%A_%a.err
 #SBATCH --partition=batch
 #SBATCH --gres=gpu:1
-#SBATCH --mem=48G
+#SBATCH --mem=128G
 #SBATCH --cpus-per-task=8
-#SBATCH --time=6-00:00:00
-#SBATCH --array=0-19%4
+#SBATCH --time=4-00:00:00
+#SBATCH --array=0-9%4
 
 
 
@@ -26,6 +26,6 @@ nvidia-smi || true
 
 
 
-srun python /home/kchand/image_registration/src/train_ensemble.py
+srun python /home/kchand/image_registration/src/train_ensemble.py 
 
 
