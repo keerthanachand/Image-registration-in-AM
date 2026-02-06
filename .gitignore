@@ -2,3 +2,9 @@
 # Large meshes
 *.stl
 *.ply
+
+# Large mesh artifacts
+src/*.stl
+src/*.ply
+*.stl
+*.ply
