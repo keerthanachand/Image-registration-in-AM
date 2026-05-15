@@ -1160,3 +1160,5 @@ if __name__ == "__main__":
     #dice_before = 2 * np.sum(binary_ct & binary_cad[:,:,:]) / (np.sum(binary_ct[:,:,:]) + np.sum(binary_cad[:,:,:]))
     #dice_after = 2 * np.sum(binary_ct & binary_moved_cad[:,:,:]) / (np.sum(binary_ct[:,:,:]) + np.sum(binary_moved_cad[:,:,:]))
     dice = dice_coefficient(cad_image, moved_ct)
+
+    

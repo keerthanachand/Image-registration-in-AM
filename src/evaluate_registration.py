@@ -19,11 +19,15 @@ from evaluation_utils import (
     test_data_generator,
     plot_images, 
     plot_3x3_images, 
-    save_image_as_vtk
+    save_image_as_vtk,
+    plot_overlay,
+    generate_plot_overlays,
+    add_scalebar,
     save_moved_image_as_vtk,
     save_displacement_vector_as_vtk,
     dice_coefficient,
-    save_as_tiff, save_as_tiff_uint8
+    save_as_tiff, 
+    save_as_tiff_uint8,
     binarize_volume,
     compute_diff_map,
     report_combined_difference_percentages
@@ -31,10 +35,10 @@ from evaluation_utils import (
 
 
 
-# Load trained VoxelMorph model
-model_path = "/home/kchand/results/vxm_model_weights.h5"
-architecture_path = "/home/kchand/results/vxm_model_architecture.json"
 
+# Load trained VoxelMorph model
+model_path = "/home/kchand/results/cross_validation/vxm_weights_fold/weights_fold0.h5"
+architecture_path = "/home/kchand/results/cross_validation/vxm_model_architecture.json"
 
 # Load model architecture
 with open(architecture_path, "r") as json_file:
@@ -115,4 +119,8 @@ save_as_tiff_uint8(fixed_image, r'/home/kchand/results//TPMS7/v1/fixed_image.tif
 save_as_tiff_uint8(moving_image, r'/home/kchand/results//TPMS7/v1/moving_image.tiff')
 
 print('All data is saved!')'
+
+
+
+
 

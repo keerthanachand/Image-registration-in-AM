@@ -427,3 +427,66 @@ def test_data_generator(vxm_model, hdf5_file, patch_size=(128, 128, 128), stride
         yield reconstructed_moved, reconstructed_displacement, fixed_image, moving_image  # Yield the reconstructed volumes and fixed image
 
 
+def add_scalebar(ax, length_pixels=150, label="1 mm", height=8, pad=20):
+    """
+    Adds a clean horizontal scalebar with the label above it.
+    Parameters:
+    - ax: matplotlib axis
+    - length_pixels: length of the scalebar (in pixels)
+    - label: string to display above the bar
+    - height: thickness of the black bar
+    - pad: padding from the bottom of the image (in pixels)
+    """
+    # Adjust for axis direction (handles flipped Y axes)
+    ylim = ax.get_ylim()
+    y_direction = -1 if ylim[0] > ylim[1] else 1
+    y_start = ylim[0] + y_direction * pad
+    x_start = 20  # fixed x offset from left
+    # Draw the black scalebar
+    ax.add_patch(
+        plt.Rectangle((x_start, y_start), length_pixels, height,
+                      color='black', zorder=10)
+    )
+    # Draw the label clearly ABOVE the bar (not overlapping)
+    ax.text(
+        x_start + length_pixels / 2,  # center of the bar
+        y_start + height + 40 * y_direction,  # position above the bar
+        label,
+        color='black',
+        fontsize=16,
+        ha='center',
+        va='bottom' if y_direction == 1 else 'top',
+        bbox=dict(
+            facecolor='white',
+            edgecolor='black',
+            boxstyle='round,pad=0.7',
+            alpha=0.5
+        )
+    )
+
+def generate_plot_overlays(ct_image, cad_image, moved_ct):
+    Dx, Dy, Dz = cad_image.shape
+    x_mid, y_mid, z_mid = Dx // 2, Dy // 2, Dz // 2
+    fig, axes = plt.subplots(2, 3, figsize=(25, 10))
+    titles = ["XCT vs CAD", "XCT vs CAD", "XCT vs CAD",
+              "MOVED XCT vs CAD", "MOVED XCT vs CAD", "MOVED XCT vs CAD"]
+    slices = [
+        (cad_image[x_mid, :, :], ct_image[x_mid, :, :]),
+        (np.rot90(cad_image[:, :, z_mid], k=-1), np.rot90(ct_image[:, :, z_mid], k=-1)),
+        (cad_image[:, y_mid, :], ct_image[:, y_mid, :]),
+        (cad_image[x_mid, :, :], moved_ct[x_mid, :, :]),
+        (np.rot90(cad_image[:, :, z_mid], k=-1), np.rot90(moved_ct[:, :, z_mid], k=-1)),
+        (cad_image[:, y_mid, :], moved_ct[:, y_mid, :]),
+    ]
+    for ax, (cad, ct), title in zip(axes.flat, slices, titles):
+        plot_overlay(ax, cad, ct, title)
+        add_scalebar(ax, length_pixels=100, label="1 mm")  # 100 pixels = 1 mm
+    plt.tight_layout()
+    plt.show()
+
+def plot_overlay(ax, cad, ct, title, cmap_cad="Greens", cmap_ct="gray", alpha=0.5):
+    ax.imshow(cad, cmap=cmap_cad, alpha=1.0)
+    ax.imshow(ct, cmap=cmap_ct, alpha=alpha)
+    ax.set_title(title, fontsize=22)
+    ax.axis("off")
+    ax.set_aspect('equal')

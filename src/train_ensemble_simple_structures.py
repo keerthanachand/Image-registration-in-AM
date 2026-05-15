@@ -4,6 +4,7 @@ os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 os.environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=0"
 os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/usr/local/cuda"  # optional, harmless if missing
 
+
 import json
 import time
 import numpy as np
@@ -23,7 +24,7 @@ from tensorflow.keras.callbacks import (
 
 from train_utils import (
     initialize_generator_parameters,
-    vxm_data_generator,
+    vxm_data_generator, vxm_data_generator_fast
 )
 
 print("TF version:", tf.__version__)
@@ -38,8 +39,16 @@ ENSEMBLE_ROOT  = os.path.join(SAVE_ROOT, "ensemble_best_from_optuna")
 PATCH_SIZE     = (128, 128, 128)
 
 # Pre-split files (already exist)
-TRAIN_H5_PATH  = "/home/kchand/input_data/data_split_Simple_structures/train_data_temp.h5"  # fixed: removed double slash
-VAL_H5_PATH    = "/home/kchand/input_data/data_split_Simple_structures/val_data_temp.h5"
+TRAIN_H5_PATH = os.environ.get(
+    "TRAIN_H5",
+    "/home/kchand/input_data/data_split_Simple_structures/train_data_temp.h5",
+)
+
+VAL_H5_PATH = os.environ.get(
+    "VAL_H5",
+    "/home/kchand/input_data/data_split_Simple_structures/val_data_temp.h5",
+)
+
 TEST_H5_PATH   = "/home/kchand/input_data/data_split_Simple_structures/test_data_temp.h5"
 
 STUDY_NAME     = "vxm_two_stage_hyperparameter"
@@ -51,8 +60,8 @@ STORAGE_URL    = os.environ.get(
 SEED_BASE      = 5000
 
 # Input pipeline knobs (threading only; safe for HDF5)
-FIT_WORKERS    = int(os.environ.get("FIT_WORKERS", "4"))
-MAX_QUEUE_SIZE = int(os.environ.get("MAX_QUEUE_SIZE", "16"))
+FIT_WORKERS    = int(os.environ.get("FIT_WORKERS", "1"))
+MAX_QUEUE_SIZE = int(os.environ.get("MAX_QUEUE_SIZE", "1"))
 VAL_STEPS      = int(os.environ.get("VAL_STEPS", "10"))
 
 
@@ -167,7 +176,6 @@ def train_single_ensemble_model(
     lr_patience_s1  = int(best_params["lr_patience_stage1"])
     lr_patience_s2  = int(best_params["lr_patience_stage2"])
     lr_min          = float(best_params["lr_min"])
-
     os.makedirs(ENSEMBLE_ROOT, exist_ok=True)
     tdir = os.path.join(ENSEMBLE_ROOT, f"ens_{ens_id:02d}")
     os.makedirs(tdir, exist_ok=True)
@@ -180,8 +188,8 @@ def train_single_ensemble_model(
     train_params = initialize_generator_parameters(hdf5_file=train_h5, patch_size=patch_size)
     val_params   = initialize_generator_parameters(hdf5_file=val_h5,   patch_size=patch_size)
 
-    train_gen = vxm_data_generator(train_h5, patch_size, batch_size, train_params)
-    val_gen   = vxm_data_generator(val_h5,   patch_size, batch_size, val_params)
+    train_gen = vxm_data_generator_fast(train_h5, patch_size, batch_size, train_params,cache_size=4)
+    val_gen   = vxm_data_generator_fast(val_h5, patch_size, batch_size, val_params, cache_size=2)
     print(f"[ENSEMBLE {ens_id:02d}] Generators initialized in {time.time()-t0:.2f}s")
 
     # =========================
@@ -280,6 +288,10 @@ def train_single_ensemble_model(
         ),
     ]
 
+    train_gen = vxm_data_generator_fast(train_h5, patch_size, batch_size, train_params,cache_size=4)
+    val_gen   = vxm_data_generator_fast(val_h5, patch_size, batch_size, val_params, cache_size=2)
+    print(f"[ENSEMBLE {ens_id:02d}] Generators initialized in {time.time()-t0:.2f}s")
+    
     print(f"[ENSEMBLE {ens_id:02d}] 🚀 Stage 2 training for {epochs_stage2} epochs ...")
     hist2 = model.fit(
         train_gen,
@@ -344,3 +356,6 @@ if __name__ == "__main__":
 
     # Clean exit (kept from your original)
     os._exit(0)
+
+
+

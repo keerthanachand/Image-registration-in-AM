@@ -16,6 +16,7 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau
 from voxelmorph import networks, losses
 import os, h5py, numpy as np
 import neurite as ne
+from collections import OrderedDict
 
 def split_by_index(input_file, test_indices, val_indices, num_samples):
     """
@@ -294,6 +295,65 @@ def initialize_generator_parameters(hdf5_file, patch_size):
         
 
     return num_samples, vol_shape, ndims
+
+def vxm_data_generator_fast(hdf5_file, patch_size=(128,128,128), batch_size=1,
+                            generator_params=None, cache_size=4):
+    num_samples, _, ndims = generator_params
+    dx, dy, dz = patch_size
+
+    zero_phi = np.zeros((batch_size, dx, dy, dz, ndims), dtype=np.float32)
+    cache = OrderedDict()
+
+    def pad_if_needed(vol, dx, dy, dz):
+        x, y, z = vol.shape[:3]
+        px = max(0, dx - x)
+        py = max(0, dy - y)
+        pz = max(0, dz - z)
+        if px or py or pz:
+            vol = np.pad(vol, ((0, px), (0, py), (0, pz)), mode="constant", constant_values=0)
+        return vol
+
+    def get_pair(hf, idx):
+        if idx in cache:
+            cache.move_to_end(idx)
+            return cache[idx]
+
+        mv = hf[f"moving_{idx}"][...].astype(np.float32, copy=False)
+        fx = hf[f"static_{idx}"][...].astype(np.float32, copy=False)
+
+        # ensure >= patch size in each dimension
+        mv = pad_if_needed(mv, dx, dy, dz)
+        fx = pad_if_needed(fx, dx, dy, dz)
+
+        cache[idx] = (mv, fx)
+        cache.move_to_end(idx)
+        if len(cache) > cache_size:
+            cache.popitem(last=False)
+        return mv, fx
+
+    with h5py.File(hdf5_file, "r") as hf:
+        while True:
+            moving = np.empty((batch_size, dx, dy, dz, 1), dtype=np.float32)
+            fixed  = np.empty((batch_size, dx, dy, dz, 1), dtype=np.float32)
+
+            idx = np.random.randint(0, num_samples)
+            mv, fx = get_pair(hf, idx)
+
+            # compute limits per-sample (IMPORTANT if shapes vary)
+            X, Y, Z = mv.shape[:3]
+            max_x = max(0, X - dx)
+            max_y = max(0, Y - dy)
+            max_z = max(0, Z - dz)
+
+            for b in range(batch_size):
+                sx = np.random.randint(0, max_x + 1)
+                sy = np.random.randint(0, max_y + 1)
+                sz = np.random.randint(0, max_z + 1)
+
+                moving[b, ..., 0] = mv[sx:sx+dx, sy:sy+dy, sz:sz+dz]
+                fixed[b,  ..., 0] = fx[sx:sx+dx, sy:sy+dy, sz:sz+dz]
+
+            yield [moving, fixed], [fixed, zero_phi]
 
 
 def vxm_data_generator(hdf5_file, patch_size=(128, 128, 128), batch_size=1, generator_params=None):

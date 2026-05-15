@@ -519,6 +519,84 @@ def check_stl_printability(mesh, verbose=True):
 
     return report
 
+def compare_mesh_slices(mesh1, mesh2, axis="z", index=None,
+                        label1="Original", label2="Compensated",
+                        color1="black", color2="red",
+                        figsize=(12,6)):
+    """
+    Plot side-by-side 2D slices of two meshes.
+
+    mesh1 : original mesh
+    mesh2 : compensated mesh
+    axis  : 'x', 'y', or 'z'
+    index : slice location
+    """
+
+    xmin, xmax, ymin, ymax, zmin, zmax = mesh1.bounds
+
+    if axis == "x":
+        if index is None:
+            index = 0.5 * (xmin + xmax)
+        origin = (index, 0, 0)
+        normal = (1, 0, 0)
+
+    elif axis == "y":
+        if index is None:
+            index = 0.5 * (ymin + ymax)
+        origin = (0, index, 0)
+        normal = (0, 1, 0)
+
+    elif axis == "z":
+        if index is None:
+            index = 0.5 * (zmin + zmax)
+        origin = (0, 0, index)
+        normal = (0, 0, 1)
+
+    else:
+        raise ValueError("axis must be x,y,z")
+
+    # Slice meshes
+    s1 = mesh1.slice(normal=normal, origin=origin)
+    s2 = mesh2.slice(normal=normal, origin=origin)
+
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    for ax, slc, title, color in zip(
+        axes,
+        [s1, s2],
+        [label1, label2],
+        [color1, color2]
+    ):
+
+        pts = slc.points
+
+        if pts.shape[0] == 0:
+            ax.set_title("Empty slice")
+            continue
+
+        if axis == "x":
+            xs, ys = pts[:,2], pts[:,1]
+            xlabel, ylabel = "Z", "Y"
+
+        elif axis == "y":
+            xs, ys = pts[:,2], pts[:,0]
+            xlabel, ylabel = "Z", "X"
+
+        else:
+            xs, ys = pts[:,1], pts[:,0]
+            xlabel, ylabel = "Y", "X"
+
+        ax.scatter(xs, ys, s=1, color=color)
+        ax.set_title(title)
+        ax.set_aspect("equal")
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+    plt.suptitle(f"Mesh slice comparison at {axis}={index:.3f}")
+    plt.tight_layout()
+    plt.show()
+
+
 def pad_displacement_field(phi, pad):
     """
     Zero-pad a displacement field on all sides.
@@ -576,17 +654,52 @@ def voxel_to_mm_zyx(mesh, spacing_zyx):
     m.points = pts
     return m
 
-disp_vtk_file_path = r"/home/kchand/results/cross_validation/fold_0/disp_field.vtk"
-ct_file_path = r"/home/kchand/results/cross_validation/fold_0/moving_image.vtk"  # XCT (Moving)
-cad_file_path = r"/home/kchand/results/cross_validation/fold_0/fixed_image.vtk"  # CAD (Fixed)
-moved_ct_file_path = r"/home/kchand/results/cross_validation/fold_0/moved_image.vtk"  # XCT (Moved)
-spacing_zyx = (0.010, 0.010, 0.010) 
+def load_scalar_field(vtk_file_path):
+    """
+    Load scalar field from VTK and reshape to (Z,Y,X)
+    """
+    grid = pv.read(vtk_file_path)
+
+    if len(grid.point_data.keys()) == 0:
+        raise ValueError("No scalar data found in VTK!")
+
+    array_name = list(grid.point_data.keys())[0]
+
+    data = np.array(grid[array_name])
+    dims = grid.dimensions
+
+    scalar_field = data.reshape((dims[0], dims[1], dims[2]), order="F")
+    return np.array(scalar_field, dtype=np.float32)
+
+
+disp_vtk_file_path = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/disp_mean.vtk"
+ct_file_path = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/moving_image.vtk"  # XCT (Moving)
+cad_file_path = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/fixed_image.vtk"  # CAD (Fixed)
+moved_ct_file_path = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/moved_mean.vtk"  # XCT (Moved)
+unc_vtk_file_path  = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/disp_std_mag_B.vtk"
+
+
+spacing_zyx = (0.015, 0.015, 0.015) 
 
 # Load displacement field
 reconstructed_displacement = load_displacement_field(disp_vtk_file_path)
 fixed_image = load_vtk_as_image(cad_file_path)
 moving_image = load_vtk_as_image(ct_file_path)
 reconstructed_moved = load_vtk_as_image(moved_ct_file_path)
+disp_uncertainty = load_scalar_field(unc_vtk_file_path)
+
+#weight disp field
+p_low, p_high = np.percentile(disp_uncertainty, (5,95))
+if p_high > p_low:
+    unc_norm = (disp_uncertainty - p_low) / (p_high - p_low)
+else:
+    unc_norm = np.zeros_like(disp_uncertainty)
+
+unc_norm = np.clip(unc_norm, 0, 1)
+confidence_map = 1.0 - unc_norm
+confidence_map = np.clip(confidence_map, 0.5, 1.0)
+unc_reconstructed_displacement = reconstructed_displacement * confidence_map[..., None]
+
 
 #binarised_fixed
 cad_bin = binarize_cad_simple(fixed_image)
@@ -596,6 +709,8 @@ fixed_image_padded, pad = pad_volume_zeros(cad_bin, pad=pad)
 moving_image_padded, pad = pad_volume_zeros(moving_image, pad=pad)
 reconstructed_moved_padded, pad = pad_volume_zeros(reconstructed_moved, pad=pad)
 displacement_padded = pad_displacement_field(reconstructed_displacement, pad=pad)
+unc_displacement_padded = pad_displacement_field(unc_reconstructed_displacement, pad=pad)
+
 
 
 #meshing the volume
@@ -605,7 +720,7 @@ cad_mesh = xct_to_mesh(fixed_image_padded, iso = 0.5)
 
 
 comp_cad = compensation_warp_mesh_with_phi(cad_mesh, displacement_padded, k=1.0)
-
+unc_comp_cad = compensation_warp_mesh_with_phi(cad_mesh, unc_displacement_padded, k=1.0)
 """
 overlay_mesh_slice_three_5(
     cad_mesh,
@@ -635,8 +750,24 @@ else:
 #test if volume is printable
 result = check_stl_printability(comp_cad)
 
+# Laplacian smoothing
+comp_cad_smooth = comp_cad.smooth(
+    n_iter=100,              # start with 20–50
+    relaxation_factor=0.5, # small value avoids shrinkage
+    feature_smoothing=False,
+    boundary_smoothing=False,
+)
 
-comp_cad_mm = voxel_to_mm_zyx(comp_cad, spacing_zyx)
+compare_mesh_slices(
+    comp_cad,
+    comp_cad_smooth,
+    axis="z",
+    index=None,
+    label1="Compensated CAD",
+    label2="Smoothed Compensated CAD"
+)
+
+comp_cad_mm = voxel_to_mm_zyx(comp_cad_smooth, spacing_zyx)
 
 if comp_cad_mm.is_manifold:
     print("Mesh in mm is manifold")
@@ -647,11 +778,11 @@ plot_mesh_slice_2d(comp_cad_mm, axis="y")
 
 
 #save stl
-save_dir = '/home/kchand/results/compensation_mesh'
+save_dir = '/home/kchand/results/comp_mesh_BTU'
 
 # folder name → "sample_15_trial23"
 #folder_name = os.path.basename(os.path.dirname(disp_vtk_file_path))
-sample_name = 'TPMS_5'
+sample_name = 'sample_04_04'
 
 # output file name
 #stl_name = f"{folder_name}_comp_mesh.stl"
