@@ -14,7 +14,7 @@ import time
 from tensorflow.keras.callbacks import ReduceLROnPlateau, CSVLogger, ModelCheckpoint
 
 
-from image_registration.src.evaluation.evaluation_utils import (
+from src.evaluation.evaluation_utils import (
     test_data_generator,
     save_displacement_vector_as_vtk,
     save_as_tiff_uint8,
@@ -24,14 +24,14 @@ from image_registration.src.evaluation.evaluation_utils import (
     
 )
 
-from train_utils import (
+from src.training.train_utils import (
     initialize_generator_parameters, 
     vxm_data_generator, 
     build_and_train_vxm_model, 
     save_image_as_vtk
 )
 
-from cross_validation import (prepare_loocv_fold)
+from src.training.train_utils import (prepare_loocv_fold)
 
 
 

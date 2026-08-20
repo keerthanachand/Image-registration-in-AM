@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from skimage import filters, morphology
 from skimage.measure import label, regionprops
 from skimage.filters import threshold_otsu
+from skimage.morphology import remove_small_objects
 from scipy.ndimage import binary_fill_holes, gaussian_filter, uniform_filter, binary_dilation
 import random
 from skimage.filters import threshold_local
@@ -323,7 +324,7 @@ def process_and_save_data(data_dir, test_samples, save_dir, use_roi=None, apply_
 
         # Apply keyhole pores filling if enabled
         if apply_fill_keyholes:
-            moving = fill_keyhole_pores_grey(moving, variation_factor=0.05, filter_size=10, dilation_iters=5, sigma=4)
+            moving = fill_keyhole_pores_grey(moving, variation_factor=0.05, filter_size=10, dilation_iters=5)
 
         #segmenting forground
         moving, binary_mask = apply_otsu_mask(moving)

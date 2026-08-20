@@ -26,9 +26,7 @@ from train_utils import (
     vxm_data_generator,
 )
 
-print("TF version:", tf.__version__)
-print("Built with CUDA:", tf.test.is_built_with_cuda())
-print("GPU available:", tf.config.list_physical_devices("GPU"))
+
 
 # ========= CONFIG =========
 MODEL_JSON     = "/home/kchand/results/cross_validation/vxm_model_architecture.json"
@@ -200,6 +198,11 @@ def train_single_ensemble_model(
 
 
 if __name__ == "__main__":
+
+    print("TF version:", tf.__version__)
+    print("Built with CUDA:", tf.test.is_built_with_cuda())
+    print("GPU available:", tf.config.list_physical_devices("GPU"))
+
     set_tf_memory_growth()
     os.makedirs(SAVE_ROOT, exist_ok=True)
 
@@ -242,8 +245,5 @@ if __name__ == "__main__":
         val_h5=val_h5,
         patch_size=PATCH_SIZE,
     )
-    import os
-    os._exit(0)
-    print("FORCE EXIT ENABLED")
 
     

@@ -3,11 +3,11 @@ import numpy as np
 import pyvista as pv
 from skimage import measure
 from scipy.ndimage import map_coordinates
-import numpy as np
 import matplotlib.pyplot as plt
 from skimage import filters
 import neurite as ne
 import h5py
+
 
 
 
@@ -160,9 +160,7 @@ def overlay_mesh_slice_three_5(mesh1, mesh2, mesh3,
 
     plt.tight_layout()
     plt.show()
-import pyvista as pv
-import matplotlib.pyplot as plt
-import numpy as np
+
 
 def plot_mesh_slice_2d(mesh, axis="z", index=None, color="black", figsize=(6,6)):
     """
@@ -671,188 +669,192 @@ def load_scalar_field(vtk_file_path):
     scalar_field = data.reshape((dims[0], dims[1], dims[2]), order="F")
     return np.array(scalar_field, dtype=np.float32)
 
-disp_vtk_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/disp_field.vtk"
-ct_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/moving_image.vtk"  # XCT (Moving)
-cad_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/fixed_image.vtk"  # CAD (Fixed)
-moved_ct_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/moved_image.vtk"  # XCT (Moved)
-unc_vtk_file_path  = r"/home/kchand/results/BAM_Inconel_simple_str_ensemble/test_00_idx_00/disp_std_mag_B.vtk"
-#save stl
-save_dir = '/home/kchand/results/Comp_mesh_BAM_Inconel'
 
-sample_name = 'sample_04_02'
+if __name__ == "__main__":
+    
 
+    disp_vtk_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/disp_field.vtk"
+    ct_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/moving_image.vtk"  # XCT (Moving)
+    cad_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/fixed_image.vtk"  # CAD (Fixed)
+    moved_ct_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/moved_image.vtk"  # XCT (Moved)
+    unc_vtk_file_path  = r"/home/kchand/results/BAM_Inconel_simple_str_ensemble/test_00_idx_00/disp_std_mag_B.vtk"
+    #save stl
+    save_dir = '/home/kchand/results/Comp_mesh_BAM_Inconel'
 
-spacing_zyx = (0.015, 0.015, 0.015) 
-
-# Load displacement field
-reconstructed_displacement = load_displacement_field(disp_vtk_file_path)
-fixed_image = load_vtk_as_image(cad_file_path)
-moving_image = load_vtk_as_image(ct_file_path)
-reconstructed_moved = load_vtk_as_image(moved_ct_file_path)
-disp_uncertainty = load_scalar_field(unc_vtk_file_path)
+    sample_name = 'sample_04_02'
 
 
-#weight disp field
-p_low, p_high = np.percentile(disp_uncertainty, (5,95))
-if p_high > p_low:
-    unc_norm = (disp_uncertainty - p_low) / (p_high - p_low)
-else:
-    unc_norm = np.zeros_like(disp_uncertainty)
+    spacing_zyx = (0.015, 0.015, 0.015) 
 
-unc_norm = np.clip(unc_norm, 0, 1)
-confidence_map = 1.0 - unc_norm
-confidence_map = np.clip(confidence_map, 0.5, 1.0)
-unc_reconstructed_displacement = reconstructed_displacement * confidence_map[..., None]
+    # Load displacement field
+    reconstructed_displacement = load_displacement_field(disp_vtk_file_path)
+    fixed_image = load_vtk_as_image(cad_file_path)
+    moving_image = load_vtk_as_image(ct_file_path)
+    reconstructed_moved = load_vtk_as_image(moved_ct_file_path)
+    disp_uncertainty = load_scalar_field(unc_vtk_file_path)
 
 
-#binarised_fixed
-cad_bin = binarize_cad_simple(fixed_image)
-#padded volumes to avoid edge artifacts´
-pad = 20
-fixed_image_padded, pad = pad_volume_zeros(cad_bin, pad=pad)
-moving_image_padded, pad = pad_volume_zeros(moving_image, pad=pad)
-reconstructed_moved_padded, pad = pad_volume_zeros(reconstructed_moved, pad=pad)
-displacement_padded = pad_displacement_field(reconstructed_displacement, pad=pad)
-unc_displacement_padded = pad_displacement_field(unc_reconstructed_displacement, pad=pad)
+    #weight disp field
+    p_low, p_high = np.percentile(disp_uncertainty, (5,95))
+    if p_high > p_low:
+        unc_norm = (disp_uncertainty - p_low) / (p_high - p_low)
+    else:
+        unc_norm = np.zeros_like(disp_uncertainty)
+
+    unc_norm = np.clip(unc_norm, 0, 1)
+    confidence_map = 1.0 - unc_norm
+    confidence_map = np.clip(confidence_map, 0.5, 1.0)
+    unc_reconstructed_displacement = reconstructed_displacement * confidence_map[..., None]
+
+
+    #binarised_fixed
+    cad_bin = binarize_cad_simple(fixed_image)
+    #padded volumes to avoid edge artifacts´
+    pad = 20
+    fixed_image_padded, pad = pad_volume_zeros(cad_bin, pad=pad)
+    moving_image_padded, pad = pad_volume_zeros(moving_image, pad=pad)
+    reconstructed_moved_padded, pad = pad_volume_zeros(reconstructed_moved, pad=pad)
+    displacement_padded = pad_displacement_field(reconstructed_displacement, pad=pad)
+    unc_displacement_padded = pad_displacement_field(unc_reconstructed_displacement, pad=pad)
 
 
 
-#meshing the volume
-iso_xct = filters.threshold_otsu(moving_image_padded)
-xct_mesh = xct_to_mesh(moving_image_padded, iso=iso_xct)
-cad_mesh = xct_to_mesh(fixed_image_padded, iso = 0.5)
+    #meshing the volume
+    iso_xct = filters.threshold_otsu(moving_image_padded)
+    xct_mesh = xct_to_mesh(moving_image_padded, iso=iso_xct)
+    cad_mesh = xct_to_mesh(fixed_image_padded, iso = 0.5)
 
 
-comp_cad = compensation_warp_mesh_with_phi(cad_mesh, displacement_padded, k=1.0)
-unc_comp_cad = compensation_warp_mesh_with_phi(cad_mesh, unc_displacement_padded, k=1.0)
+    comp_cad = compensation_warp_mesh_with_phi(cad_mesh, displacement_padded, k=1.0)
+    unc_comp_cad = compensation_warp_mesh_with_phi(cad_mesh, unc_displacement_padded, k=1.0)
 
-# ==========================================================
-# Process BOTH meshes
-# ==========================================================
+    # ==========================================================
+    # Process BOTH meshes
+    # ==========================================================
 
-meshes = {
-    "raw": comp_cad,
-    "uncertainty_weighted": unc_comp_cad
-}
+    meshes = {
+        "raw": comp_cad,
+        "uncertainty_weighted": unc_comp_cad
+    }
 
-for mesh_name, mesh in meshes.items():
+    for mesh_name, mesh in meshes.items():
 
-    print("\n======================================")
-    print(f"Processing: {mesh_name}")
-    print("======================================")
+        print("\n======================================")
+        print(f"Processing: {mesh_name}")
+        print("======================================")
 
-    # -----------------------------
-    # Printability check
-    # -----------------------------
-    result = check_stl_printability(mesh)
+        # -----------------------------
+        # Printability check
+        # -----------------------------
+        result = check_stl_printability(mesh)
 
-    # -----------------------------
-    # Smoothing
-    # -----------------------------
-    mesh_smooth = mesh.smooth(
-        n_iter=100,
-        relaxation_factor=0.5,
+        # -----------------------------
+        # Smoothing
+        # -----------------------------
+        mesh_smooth = mesh.smooth(
+            n_iter=100,
+            relaxation_factor=0.5,
+            feature_smoothing=False,
+            boundary_smoothing=False,
+        )
+
+        # -----------------------------
+        # Convert voxel -> mm
+        # -----------------------------
+        mesh_mm = voxel_to_mm_zyx(
+            mesh_smooth,
+            spacing_zyx
+        )
+
+        # -----------------------------
+        # Check manifoldness
+        # -----------------------------
+        if mesh_mm.is_manifold:
+            print(f"{mesh_name}: manifold")
+        else:
+            print(f"{mesh_name}: NOT manifold")
+
+        # -----------------------------
+        # Save STL
+        # -----------------------------
+        stl_name = f"{sample_name}_{mesh_name}_comp_mesh.stl"
+
+        stl_path = os.path.join(
+            save_dir,
+            stl_name
+        )
+
+        mesh_mm.save(stl_path)
+
+        print("Saved:", stl_path)
+
+
+    overlay_mesh_slice_three_5(
+        cad_mesh,
+        comp_cad,
+        xct_mesh,
+        axis="z",
+        slice_value=250,       # integer slice
+        use_voxel_index=True,  # convert using spacing
+        spacing=(1,1,1),       # or (sz, sy, sx) if real units
+        alphas=(1.0, 0.2, 0.2),
+        labels=("CAD", "compensated CAD", "CT")
+    )
+
+    overlay_mesh_slice_three(mesh1=cad_mesh, mesh2=comp_cad, mesh3=xct_mesh,
+                            axis="z", slice_value=250,
+                            labels=("CAD", "comp CAD", "XCT"),
+                            colors=("C0", "C1", "C2"))
+
+
+
+    #convert comp CAD to mm for printing
+
+    if comp_cad.is_manifold:
+        print("Mesh is manifold")
+    else: 
+        print("Mesh is lieder not manifold ")
+        #comp_cad = comp_cad.reconstruct_surface(progress_bar=True)
+
+    #test if volume is printable
+    result = check_stl_printability(comp_cad)
+
+    # Laplacian smoothing
+    comp_cad_smooth = comp_cad.smooth(
+        n_iter=100,              # start with 20–50
+        relaxation_factor=0.5, # small value avoids shrinkage
         feature_smoothing=False,
         boundary_smoothing=False,
     )
 
-    # -----------------------------
-    # Convert voxel -> mm
-    # -----------------------------
-    mesh_mm = voxel_to_mm_zyx(
-        mesh_smooth,
-        spacing_zyx
+    compare_mesh_slices(
+        comp_cad,
+        comp_cad_smooth,
+        axis="z",
+        index=None,
+        label1="Compensated CAD",
+        label2="Smoothed Compensated CAD"
     )
 
-    # -----------------------------
-    # Check manifoldness
-    # -----------------------------
-    if mesh_mm.is_manifold:
-        print(f"{mesh_name}: manifold")
-    else:
-        print(f"{mesh_name}: NOT manifold")
+    comp_cad_mm = voxel_to_mm_zyx(comp_cad_smooth, spacing_zyx)
 
-    # -----------------------------
-    # Save STL
-    # -----------------------------
-    stl_name = f"{sample_name}_{mesh_name}_comp_mesh.stl"
+    if comp_cad_mm.is_manifold:
+        print("Mesh in mm is manifold")
+    else: 
+        print("Mesh in mm is lieder not manifold ")
+        #comp_cad = comp_cad.reconstruct_surface(progress_bar=True)
+    plot_mesh_slice_2d(comp_cad_mm, axis="y")
 
-    stl_path = os.path.join(
-        save_dir,
-        stl_name
-    )
+    # output file name
+    #stl_name = f"{folder_name}_comp_mesh.stl"
+    stl_name = f"{sample_name}_comp_mesh.stl"
 
-    mesh_mm.save(stl_path)
+    # full path
+    stl_path = os.path.join(save_dir, stl_name)
 
-    print("Saved:", stl_path)
+    # triangulate and save
+    comp_cad_mm.save(stl_path)
 
-
-overlay_mesh_slice_three_5(
-    cad_mesh,
-    comp_cad,
-    xct_mesh,
-    axis="z",
-    slice_value=250,       # integer slice
-    use_voxel_index=True,  # convert using spacing
-    spacing=(1,1,1),       # or (sz, sy, sx) if real units
-    alphas=(1.0, 0.2, 0.2),
-    labels=("CAD", "compensated CAD", "CT")
-)
-
-overlay_mesh_slice_three(mesh1=cad_mesh, mesh2=comp_cad, mesh3=xct_mesh,
-                         axis="z", slice_value=250,
-                         labels=("CAD", "comp CAD", "XCT"),
-                         colors=("C0", "C1", "C2"))
-
-
-
-#convert comp CAD to mm for printing
-
-if comp_cad.is_manifold:
-    print("Mesh is manifold")
-else: 
-    print("Mesh is lieder not manifold ")
-    #comp_cad = comp_cad.reconstruct_surface(progress_bar=True)
-
-#test if volume is printable
-result = check_stl_printability(comp_cad)
-
-# Laplacian smoothing
-comp_cad_smooth = comp_cad.smooth(
-    n_iter=100,              # start with 20–50
-    relaxation_factor=0.5, # small value avoids shrinkage
-    feature_smoothing=False,
-    boundary_smoothing=False,
-)
-
-compare_mesh_slices(
-    comp_cad,
-    comp_cad_smooth,
-    axis="z",
-    index=None,
-    label1="Compensated CAD",
-    label2="Smoothed Compensated CAD"
-)
-
-comp_cad_mm = voxel_to_mm_zyx(comp_cad_smooth, spacing_zyx)
-
-if comp_cad_mm.is_manifold:
-    print("Mesh in mm is manifold")
-else: 
-    print("Mesh in mm is lieder not manifold ")
-    #comp_cad = comp_cad.reconstruct_surface(progress_bar=True)
-plot_mesh_slice_2d(comp_cad_mm, axis="y")
-
-# output file name
-#stl_name = f"{folder_name}_comp_mesh.stl"
-stl_name = f"{sample_name}_comp_mesh.stl"
-
-# full path
-stl_path = os.path.join(save_dir, stl_name)
-
-# triangulate and save
-comp_cad_mm.save(stl_path)
-
-print("Saved STL to:", stl_path)
+    print("Saved STL to:", stl_path)
 
 

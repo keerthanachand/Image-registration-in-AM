@@ -14,8 +14,6 @@ import pandas as pd
 import tifffile as tiff
 from tensorflow.keras.callbacks import ReduceLROnPlateau
 from voxelmorph import networks, losses
-import os, h5py, numpy as np
-import neurite as ne
 from collections import OrderedDict
 
 def split_by_index(input_file, test_indices, val_indices, num_samples):
@@ -680,6 +678,6 @@ if __name__ == '__main__':
 
 
     # Convert training history to a DataFrame and save as CSV
-    history_df = pd.DataFrame(hist.history)
+    history_df = pd.DataFrame(history.history)
     history_df.to_csv(r'/home/kchand/results/training_history.csv', index=False)
 

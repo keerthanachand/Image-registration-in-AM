@@ -26,8 +26,7 @@ from src.training.train_utils import (
     save_image_as_vtk
 )
 
-print("🔍 Checking available devices...")
-print(tf.config.list_physical_devices('GPU'))
+
 
 def plot_3x3_images(fixed_image, moving_image, reconstructed_image, save_path=None):
     """
@@ -147,7 +146,7 @@ def evaluate_voxelmorph(test_hdf5, weights_path, result_dir, json_file):
     vxm_model.load_weights(weights_path)
 
 
-    print("🧠 Running inference on test sample...")
+    print("Running inference on test sample...")
     
     # Initialize the test generator
     test_generator = test_data_generator(vxm_model, test_hdf5, patch_size=(128, 128, 128), stride=(64, 64, 64))
@@ -155,16 +154,16 @@ def evaluate_voxelmorph(test_hdf5, weights_path, result_dir, json_file):
     start_time = time.time()
     reconstructed_moved, reconstructed_displacement, fixed_image, moving_image = next(test_generator)
     inference_time_sec = time.time() - start_time
-    print(f"⏱️ Inference completed in {inference_time_sec:.2f} seconds")
+    print(f"Inference completed in {inference_time_sec:.2f} seconds")
 
-    print("🧼 Computing Dice and BDM metrics...")
+    print("Computing Dice and BDM metrics...")
     #fixed_crop = fixed_image[:, :530, :]
     #moving_crop = moving_image[:, :530, :]
     #moved_crop = reconstructed_moved[:, :530, :]
     fixed_crop = fixed_image[:, :, :]
     moving_crop = moving_image[:, :, :]
     moved_crop = reconstructed_moved[:, :, :]
-    # print("🧼 Computing Dice and BDM metrics...")
+    # print("Computing Dice and BDM metrics...")
     # fixed_crop = fixed_image
     # moving_crop = moving_image
     # moved_crop = reconstructed_moved
@@ -222,6 +221,8 @@ def evaluate_voxelmorph(test_hdf5, weights_path, result_dir, json_file):
 
 
 def prepare_loocv_fold(input_file, test_idx, num_samples):
+
+    
     train_file = '/home/kchand/input_data/train_data_temp.h5'
     test_file = '/home/kchand/input_data/test_data_temp.h5'
 
@@ -253,7 +254,7 @@ def prepare_loocv_fold(input_file, test_idx, num_samples):
     return train_file, test_file
 
 def run_loocv_pipeline(num_samples, only_fold=None):
-    print("🏁 Starting LOOCV pipeline...")
+    print("Starting LOOCV pipeline...")
     all_data_path = '/home/kchand/input_data/all_samples_simple_structures.h5'
     results_dir = '/home/kchand/results/simple_structures_sample15_stepsperepoch50_epochs200'
     weights_output_dir = os.path.join(results_dir, 'vxm_weights_fold')

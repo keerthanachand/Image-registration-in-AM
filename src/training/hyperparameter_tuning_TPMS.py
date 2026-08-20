@@ -5,7 +5,7 @@ import json, numpy as np, tensorflow as tf, optuna, h5py, time
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, ReduceLROnPlateau
 import voxelmorph as vxm
 from voxelmorph import losses
-from train_utils import split_by_index, initialize_generator_parameters, vxm_data_generator, build_and_train_vxm_model
+from src.training.train_utils import split_by_index, initialize_generator_parameters, vxm_data_generator, build_and_train_vxm_model
 
 from optuna.samplers import TPESampler
 from optuna.pruners import HyperbandPruner

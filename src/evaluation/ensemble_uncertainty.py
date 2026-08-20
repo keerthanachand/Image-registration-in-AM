@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 import tensorflow as tf
 import voxelmorph as vxm
-
+import pandas as pd
 # -------------------------
 # ENV / TF SETTINGS
 # -------------------------
@@ -48,6 +48,7 @@ import matplotlib.pyplot as plt
 
 # -------------------------
 # CONFIG
+# Update paths for local environment
 # -------------------------
 ARCH_PATH = "/home/kchand/results/cross_validation/vxm_model_architecture.json"
 
@@ -567,7 +568,7 @@ def main():
         save_displacement_vector_as_vtk(disp_mean, os.path.join(out_dir, "disp_mean.vtk"))
 
         # Dice summary CSV
-        import pandas as pd
+
         df = pd.DataFrame({"member": list(range(N_ENSEMBLE)), "dice_after": dice_after_arr})
         df.loc[len(df)] = ["mean", float(dice_after_arr.mean())]
         df.loc[len(df)] = ["std", float(dice_after_arr.std(ddof=1))]

@@ -22,14 +22,12 @@ from tensorflow.keras.callbacks import (
     EarlyStopping,
 )
 
-from train_utils import (
+from src.training.train_utils import (
     initialize_generator_parameters,
     vxm_data_generator, vxm_data_generator_fast
 )
 
-print("TF version:", tf.__version__)
-print("Built with CUDA:", tf.test.is_built_with_cuda())
-print("GPU available:", tf.config.list_physical_devices("GPU"))
+
 
 # ========= CONFIG =========
 MODEL_JSON     = "/home/kchand/results/cross_validation/vxm_model_architecture.json"

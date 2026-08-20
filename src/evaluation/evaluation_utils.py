@@ -9,12 +9,6 @@ import pyvista as pv
 import pandas as pd
 import time
 from skimage import filters
-
-#script to plot histogram
-
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 from pathlib import Path
 
 def plot_two_histories(hist1_path, hist2_path, label1="Model A", label2="Model B",
