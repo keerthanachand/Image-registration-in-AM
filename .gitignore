@@ -1,10 +1,51 @@
+# -----------------------------
+# Python cache / compiled files
+# -----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Large meshes
+# -----------------------------
+# Virtual environments
+# -----------------------------
+.env
+.venv/
+venv/
+env/
+
+# -----------------------------
+# Jupyter
+# -----------------------------
+.ipynb_checkpoints/
+
+# -----------------------------
+# IDE / editor files
+# -----------------------------
+.idea/
+.vscode/
+
+# -----------------------------
+# Operating system files
+# -----------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# Logs / temporary files
+# -----------------------------
+*.log
+*.tmp
+*.temp
+
+# -----------------------------
+# Large geometry / mesh files
+# -----------------------------
 *.stl
 *.ply
 
-# Large mesh artifacts
-src/*.stl
-src/*.ply
-*.stl
-*.ply
+# -----------------------------
+# Generated documents / figures
+# -----------------------------
+results/*.pdf
+results/*.png
+results/*.svg
