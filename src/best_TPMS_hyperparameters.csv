@@ -1,0 +1,2 @@
+batch_size,steps_per_epoch,lambda_smooth,lr_stage1,epochs_stage1,lr_factor_s1,lr_patience_stage1,lr_min,best_trial_number,best_objective
+8,50,0.1989776870912006,0.0007677577248070413,75,0.5136644156688891,7,8.283342118981939e-08,31,-0.7807095646858215

@@ -1091,6 +1091,72 @@ def binarize_volume_with_middle_roi(volume):
     binary_volume = (volume >= threshold).astype(np.uint8)
     return binary_volume
 
+
+import pyvista as pv
+import numpy as np
+
+
+def load_vtk_as_image(filename, array_name="image"):
+    """
+    Load a VTK image file and return it as a NumPy 3D array.
+
+    Parameters
+    ----------
+    filename : str
+        Path to VTK file.
+    array_name : str
+        Name of the scalar array inside the VTK file.
+        Usually 'image' in your exported files.
+
+    Returns
+    -------
+    image_array : np.ndarray
+        3D image volume.
+    """
+
+    grid = pv.read(filename)
+
+    if array_name not in grid.point_data:
+        print("Available arrays:", list(grid.point_data.keys()))
+        raise KeyError(f"Array '{array_name}' not found in {filename}")
+
+    image_data = np.asarray(grid.point_data[array_name])
+    dims = grid.dimensions
+
+    image_array = image_data.reshape(
+        (dims[0], dims[1], dims[2]),
+        order="F"
+    )
+
+    return image_array
+
+
+def load_ct_cad_moved_vtk(ct_file_path, cad_file_path, moved_ct_file_path):
+    """
+    Load moving XCT, fixed CAD, and moved XCT VTK volumes.
+
+    Returns
+    -------
+    ct_image : np.ndarray
+        Moving XCT volume.
+    cad_image : np.ndarray
+        Fixed CAD volume.
+    moved_ct : np.ndarray
+        Registered / moved XCT volume.
+    """
+
+    ct_image = load_vtk_as_image(ct_file_path)
+    cad_image = load_vtk_as_image(cad_file_path)
+    moved_ct = load_vtk_as_image(moved_ct_file_path)
+
+    print("Loaded VTK volumes:")
+    print("CT image shape:       ", ct_image.shape, ct_image.dtype)
+    print("CAD image shape:      ", cad_image.shape, cad_image.dtype)
+    print("Moved XCT image shape:", moved_ct.shape, moved_ct.dtype)
+
+    return ct_image, cad_image, moved_ct
+
+
 if __name__ == "__main__":
 
 

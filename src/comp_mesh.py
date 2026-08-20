@@ -1,4 +1,4 @@
-
+import os
 import numpy as np
 import pyvista as pv
 from skimage import measure
@@ -671,12 +671,15 @@ def load_scalar_field(vtk_file_path):
     scalar_field = data.reshape((dims[0], dims[1], dims[2]), order="F")
     return np.array(scalar_field, dtype=np.float32)
 
+disp_vtk_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/disp_field.vtk"
+ct_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/moving_image.vtk"  # XCT (Moving)
+cad_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/fixed_image.vtk"  # CAD (Fixed)
+moved_ct_file_path = r"/home/kchand/results/test_results_simple_structure/sample_14_trial23/moved_image.vtk"  # XCT (Moved)
+unc_vtk_file_path  = r"/home/kchand/results/BAM_Inconel_simple_str_ensemble/test_00_idx_00/disp_std_mag_B.vtk"
+#save stl
+save_dir = '/home/kchand/results/Comp_mesh_BAM_Inconel'
 
-disp_vtk_file_path = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/disp_mean.vtk"
-ct_file_path = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/moving_image.vtk"  # XCT (Moving)
-cad_file_path = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/fixed_image.vtk"  # CAD (Fixed)
-moved_ct_file_path = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/moved_mean.vtk"  # XCT (Moved)
-unc_vtk_file_path  = r"/home/kchand/results/BTU_simple_ensemble_eval/sample_04_03_idx_02/disp_std_mag_B.vtk"
+sample_name = 'sample_04_02'
 
 
 spacing_zyx = (0.015, 0.015, 0.015) 
@@ -687,6 +690,7 @@ fixed_image = load_vtk_as_image(cad_file_path)
 moving_image = load_vtk_as_image(ct_file_path)
 reconstructed_moved = load_vtk_as_image(moved_ct_file_path)
 disp_uncertainty = load_scalar_field(unc_vtk_file_path)
+
 
 #weight disp field
 p_low, p_high = np.percentile(disp_uncertainty, (5,95))
@@ -721,7 +725,68 @@ cad_mesh = xct_to_mesh(fixed_image_padded, iso = 0.5)
 
 comp_cad = compensation_warp_mesh_with_phi(cad_mesh, displacement_padded, k=1.0)
 unc_comp_cad = compensation_warp_mesh_with_phi(cad_mesh, unc_displacement_padded, k=1.0)
-"""
+
+# ==========================================================
+# Process BOTH meshes
+# ==========================================================
+
+meshes = {
+    "raw": comp_cad,
+    "uncertainty_weighted": unc_comp_cad
+}
+
+for mesh_name, mesh in meshes.items():
+
+    print("\n======================================")
+    print(f"Processing: {mesh_name}")
+    print("======================================")
+
+    # -----------------------------
+    # Printability check
+    # -----------------------------
+    result = check_stl_printability(mesh)
+
+    # -----------------------------
+    # Smoothing
+    # -----------------------------
+    mesh_smooth = mesh.smooth(
+        n_iter=100,
+        relaxation_factor=0.5,
+        feature_smoothing=False,
+        boundary_smoothing=False,
+    )
+
+    # -----------------------------
+    # Convert voxel -> mm
+    # -----------------------------
+    mesh_mm = voxel_to_mm_zyx(
+        mesh_smooth,
+        spacing_zyx
+    )
+
+    # -----------------------------
+    # Check manifoldness
+    # -----------------------------
+    if mesh_mm.is_manifold:
+        print(f"{mesh_name}: manifold")
+    else:
+        print(f"{mesh_name}: NOT manifold")
+
+    # -----------------------------
+    # Save STL
+    # -----------------------------
+    stl_name = f"{sample_name}_{mesh_name}_comp_mesh.stl"
+
+    stl_path = os.path.join(
+        save_dir,
+        stl_name
+    )
+
+    mesh_mm.save(stl_path)
+
+    print("Saved:", stl_path)
+
+
 overlay_mesh_slice_three_5(
     cad_mesh,
     comp_cad,
@@ -733,11 +798,13 @@ overlay_mesh_slice_three_5(
     alphas=(1.0, 0.2, 0.2),
     labels=("CAD", "compensated CAD", "CT")
 )
-"""
+
 overlay_mesh_slice_three(mesh1=cad_mesh, mesh2=comp_cad, mesh3=xct_mesh,
                          axis="z", slice_value=250,
                          labels=("CAD", "comp CAD", "XCT"),
                          colors=("C0", "C1", "C2"))
+
+"""
 
 #convert comp CAD to mm for printing
 
@@ -776,14 +843,6 @@ else:
     #comp_cad = comp_cad.reconstruct_surface(progress_bar=True)
 plot_mesh_slice_2d(comp_cad_mm, axis="y")
 
-
-#save stl
-save_dir = '/home/kchand/results/comp_mesh_BTU'
-
-# folder name → "sample_15_trial23"
-#folder_name = os.path.basename(os.path.dirname(disp_vtk_file_path))
-sample_name = 'sample_04_04'
-
 # output file name
 #stl_name = f"{folder_name}_comp_mesh.stl"
 stl_name = f"{sample_name}_comp_mesh.stl"
@@ -795,4 +854,6 @@ stl_path = os.path.join(save_dir, stl_name)
 comp_cad_mm.save(stl_path)
 
 print("Saved STL to:", stl_path)
+
+"""
 

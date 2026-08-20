@@ -78,6 +78,7 @@ test_generator = test_data_generator(vxm_model, test_hdf5, patch_size=(128, 128,
 # Get the output for just one sample
 reconstructed_moved, reconstructed_displacement, fixed_image, moving_image = next(test_generator)
 # Plot the images
+generate_plot_overlays(moving_image, fixed_image, reconstructed_moved)
 plot_images(fixed_image, moving_image, reconstructed_moved)
 plot_3x3_images(fixed_image, moving_image, reconstructed_moved)
 

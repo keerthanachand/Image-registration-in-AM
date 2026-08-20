@@ -61,12 +61,12 @@ ARCH_PATH = "/home/kchand/results/cross_validation/vxm_model_architecture.json"
 ENSEMBLE_ROOT = "/home/kchand/results/finetune_two_stage_optuna/ensemble_best_from_optuna"
 N_ENSEMBLE = 10
 
-TEST_H5_PATH = "/home/kchand/input_data/test_BTU_samples_simple_structures_pad50_bothends.h5"
+TEST_H5_PATH = "/home/kchand/input_data/BAM_inconel_samples_simple_structures_padded64.h5"
 
 PATCH_SIZE = (128, 128, 128)
 STRIDE = (64, 64, 64)
 
-OUT_ROOT = "/home/kchand/results/BTU_simple_ensemble_eval"
+OUT_ROOT = "/home/kchand/results/BAM_Inconel_simple_str_ensemble"
 
 
 # -------------------------
@@ -592,3 +592,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+

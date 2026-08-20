@@ -427,7 +427,7 @@ def test_data_generator(vxm_model, hdf5_file, patch_size=(128, 128, 128), stride
         yield reconstructed_moved, reconstructed_displacement, fixed_image, moving_image  # Yield the reconstructed volumes and fixed image
 
 
-def add_scalebar(ax, length_pixels=150, label="1 mm", height=8, pad=20):
+def add_scalebar(ax, length_pixels=100, label="1.5 mm", height=8, pad=20):
     """
     Adds a clean horizontal scalebar with the label above it.
     Parameters:
@@ -471,16 +471,32 @@ def generate_plot_overlays(ct_image, cad_image, moved_ct):
     titles = ["XCT vs CAD", "XCT vs CAD", "XCT vs CAD",
               "MOVED XCT vs CAD", "MOVED XCT vs CAD", "MOVED XCT vs CAD"]
     slices = [
+        # First column (no rotation)
         (cad_image[x_mid, :, :], ct_image[x_mid, :, :]),
-        (np.rot90(cad_image[:, :, z_mid], k=-1), np.rot90(ct_image[:, :, z_mid], k=-1)),
-        (cad_image[:, y_mid, :], ct_image[:, y_mid, :]),
+
+        # Middle column → 90° clockwise
+        (np.rot90(cad_image[:, :, z_mid], k=-1),
+         np.rot90(ct_image[:, :, z_mid], k=-1)),
+
+        # Last column → 180°
+        (np.rot90(cad_image[:, y_mid, :], k=2),
+         np.rot90(ct_image[:, y_mid, :], k=2)),
+
+        # Second row
         (cad_image[x_mid, :, :], moved_ct[x_mid, :, :]),
-        (np.rot90(cad_image[:, :, z_mid], k=-1), np.rot90(moved_ct[:, :, z_mid], k=-1)),
-        (cad_image[:, y_mid, :], moved_ct[:, y_mid, :]),
+
+        # Middle column → 90° clockwise
+        (np.rot90(cad_image[:, :, z_mid], k=-1),
+         np.rot90(moved_ct[:, :, z_mid], k=-1)),
+
+        # Last column → 180°
+        (np.rot90(cad_image[:, y_mid, :], k=2),
+         np.rot90(moved_ct[:, y_mid, :], k=2)),
     ]
+
     for ax, (cad, ct), title in zip(axes.flat, slices, titles):
         plot_overlay(ax, cad, ct, title)
-        add_scalebar(ax, length_pixels=100, label="1 mm")  # 100 pixels = 1 mm
+        add_scalebar(ax, length_pixels=100, label="1.5 mm")  # 100 pixels = 1 mm
     plt.tight_layout()
     plt.show()
 
@@ -490,3 +506,17 @@ def plot_overlay(ax, cad, ct, title, cmap_cad="Greens", cmap_ct="gray", alpha=0.
     ax.set_title(title, fontsize=22)
     ax.axis("off")
     ax.set_aspect('equal')
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
