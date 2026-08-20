@@ -1,61 +1,78 @@
 # Image Registration in Additive Manufacturing
 
-This repository contains scripts for **XCT data preprocessing, machine learning-based data preparation, model training & testing, and data visualization**.  
-The **primary goal** of this project is actaul nomimal comparison of **X-ray Computed Tomography (XCT) with Computer-Aided Design (CAD)** models to analyze **deformation in 3D-printed AM structures**.  
+This repository contains Python scripts for image registration and deformation analysis of additive manufactured parts using X-ray Computed Tomography (XCT) and Computer-Aided Design (CAD) data.
 
-## 📂 Project Workflow  
+The main goal of the project is to perform actual-to-nominal comparison between XCT scans and CAD models and to analyze geometric deviations in 3D-printed structures.
 
-### 1️⃣ **Linear Registration of XCT and CAD**  
-- **Intensity-based or Point Cloud-based Registration**:  
-  - Align XCT and CAD models using traditional registration methods.  
-  - Compute transformation matrices for initial alignment.  
+## Workflow
 
-### 2️⃣ **Data Preparation for Deep Learning**  
- 
-- **Preprocessing XCT Data**:  
-  - Remove powder artifacts and close pores to enhance XCT quality.   
-- **Convert Data into HDF5 Format**:  
-  - Structure datasets for deep learning model training.  
-  - Store voxel-based data efficiently.  
+### 1. XCT–CAD Registration
 
-### 3️⃣ **Training the VoxelMorph Model**  
-- **Train on Preprocessed XCT and CAD Data**:  
-  - Implement an unsupervised deep learning approach using VoxelMorph.  
-  - Optimize model performance for deformation prediction.  
+XCT and CAD data are first aligned using linear registration methods such as intensity-based registration or point-cloud-based registration.
 
-### 4️⃣ **Testing & Quantification of Results**  
-- **Apply Model to New XCT Scans**: Generate deformation fields.  
-- **Evaluate Performance**:  
-  - Compare model-predicted deformations with known deformations.  
-  - Calculate voxel-wise displacement metrics.  
+### 2. Data Preprocessing
 
-### 5️⃣ **Visualization & Analysis**  
-- **Generate Displacement Fields**:  
-  - Visualize deformations using 3D vector field plots.  
-- **Analyze Differences Between XCT and CAD**:  
-  - Identify deformation zones and quantify material shrinkage/expansion.  
+The XCT data are preprocessed before deep learning-based registration. This includes steps such as:
 
----
+- removing powder artifacts
+- filling pores
+- thresholding and normalization
+- preparing paired XCT and CAD volumes
+- storing the processed data in HDF5 format
 
-## 🛠 Technologies Used  
-- **Python** (NumPy, SciPy, OpenCV, TensorFlow/PyTorch)  
-- **Deep Learning** (VoxelMorph, TensorFlow, Keras)  
-- **3D Data Processing** (SimpleITK, Open3D, PyVista)  
-- **Visualization** (Matplotlib, Seaborn, Plotly)  
-- **HDF5 for Data Storage**  
+### 3. VoxelMorph Training
 
---- 
-## 📂 Directory Structure  
+VoxelMorph is used for non-linear image registration between XCT and CAD data.
 
-/deform_reg_project │── registration/ # XCT-CAD registration scripts │── preprocessing/ # Data preprocessing scripts │── ml_data_preparation/ # Data preparation for DL training │── model_training/ # VoxelMorph training scripts │── testing/ # Model testing and evaluation scripts │── visualization/ # Deformation visualization scripts │── requirements.txt # Dependencies list │── README.md # Project documentation
+The repository includes scripts for:
 
-## 🚀 Installation
-Clone this repository:
+- model training
+- cross-validation
+- fine-tuning
+- hyperparameter optimization
+- ensemble training
 
-```bash
-git clone https://github.com/keerthanachand/Image-registration-in-AM.git
-cd Image-registration-in-AM
+### 4. Evaluation
 
-Install Dependencies
+The trained models are evaluated using registration and deformation metrics such as:
 
-pip install -r requirements.txt
+- Dice coefficient
+- voxel-wise difference maps
+- displacement fields
+
+The registered volumes and displacement fields can also be exported for further analysis.
+
+### 5. Deformation Analysis and Compensation
+
+The predicted displacement fields are used to analyze geometric deviations between the manufactured part and the nominal CAD model.
+
+The repository also contains scripts for applying the predicted deformation to mesh data for geometry compensation.
+
+## Main Technologies
+
+- Python
+- TensorFlow / Keras
+- VoxelMorph
+- NumPy
+- SciPy
+- scikit-image
+- HDF5
+- PyVista
+- Matplotlib
+
+## Directory Structure
+
+```text
+Image-registration-in-AM/
+├── notebooks/
+├── src/
+│   ├── compensation/
+│   ├── evaluation/
+│   ├── preprocessing/
+│   ├── scripts/
+│   ├── training/
+│   ├── visualization/
+│   └── results/
+├── requirements.txt
+├── .gitignore
+└── README.md
