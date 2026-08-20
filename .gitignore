@@ -37,6 +37,8 @@ Thumbs.db
 *.tmp
 *.temp
 
+#log hyper
+logs_hyper/
 # -----------------------------
 # Large geometry / mesh files
 # -----------------------------
