@@ -1,0 +1,58 @@
+Sat Feb  7 11:14:59 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.48.01              Driver Version: 590.48.01      CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H100 80GB HBM3          On  |   00000000:4E:00.0 Off |                    0 |
+| N/A   44C    P0             87W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+TF version: 2.15.0
+Built with CUDA: True
+GPU available: [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]
+Visible GPUs: [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]
+Running ensemble member id = 6
+[split] Train H5: /tmp/train_data_temp.h5
+[split] Val   H5: /tmp/val_data_temp.h5
+[split] Test  H5: /home/kchand/input_data/data_split_Simple_structures/test_data_temp.h5
+Connecting to Optuna study 'vxm_two_stage_hyperparameter' at:
+  sqlite:////home/kchand/results/finetune_two_stage_optuna/voxelmorph_two_stage.db?timeout=300
+
+===== BEST RESULT FROM STUDY =====
+Best value: -0.8027189373970032
+Best params:
+{
+  "batch_size": 4,
+  "steps_per_epoch": 50,
+  "freeze_levels_stage1": 2,
+  "lambda_smooth": 0.17417427485264375,
+  "lr_stage1": 2.533182677258506e-05,
+  "lr_stage2": 1.6593966171434618e-05,
+  "epochs_stage1": 70,
+  "epochs_stage2": 20,
+  "lr_factor_s1": 0.38356294873723007,
+  "lr_factor_s2": 0.6148080073667399,
+  "lr_patience_stage1": 5,
+  "lr_patience_stage2": 4,
+  "lr_min": 1.1136549957470212e-08
+}
+
+===== [ENSEMBLE] Training member 06 with seed 5006 =====
+[ENSEMBLE 06] Generators initialized in 0.00s
+[ENSEMBLE 06] Loading pretrained model from JSON+weights ...
+[ENSEMBLE 06] Freezing 2 encoder levels for Stage 1 ...
+[freeze] Froze 2 Conv3D layers (first 2 encoder levels).
+[ENSEMBLE 06] Compiling Stage 1 (lr=2.53e-05, λ=0.17417427485264375) ...
+[ENSEMBLE 06] 🚀 Stage 1 training for 70 epochs ...
+Epoch 1/70
